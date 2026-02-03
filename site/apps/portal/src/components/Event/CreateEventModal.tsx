@@ -51,9 +51,13 @@ export default function CreateEventModal({
         return raw && typeof raw === 'object' ? raw : {};
     })() as any;
 
-    const [step, setStep] = useState<'template' | 'settings' | 'details' | 'success'>(
-        eventToEdit ? 'settings' : initialStep
-    );
+    const [step, setStep] = useState<'template' | 'settings' | 'details' | 'success'>(() => {
+        // If editing, go to settings
+        if (eventToEdit) return 'settings';
+        // If only one event type enabled, skip template selection
+        if (ENABLED_EVENT_TYPES.length === 1) return 'settings';
+        return initialStep;
+    });
 
     const defaultTemplate = (() => {
         if (ENABLED_EVENT_TYPES.includes('quiz')) return 'quiz';

@@ -265,7 +265,7 @@ export default function DashboardPage() {
                         refetch();
                     }}
                     eventToEdit={editingEvent}
-                    displayTitle={`${editingEvent.eventType === 'quiz' ? 'CANLI SORU' : editingEvent.eventType === 'poll' ? 'ANKET' : editingEvent.eventType.toUpperCase()} - ETKİNLİK DÜZENLE`}
+                    displayTitle={`${(editingEvent.eventType || editingEvent.event_type) === 'quiz' ? 'CANLI SORU' : (editingEvent.eventType || editingEvent.event_type) === 'poll' ? 'ANKET' : ((editingEvent.eventType || editingEvent.event_type) || 'ETKİNLİK').toUpperCase()} - ETKİNLİK DÜZENLE`}
                 />
             )}
 

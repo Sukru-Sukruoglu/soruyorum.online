@@ -129,6 +129,17 @@ function JoinPageContent() {
                 });
 
                 const data = await response.json().catch(() => null);
+                
+                // Check if event ended or cancelled - exit immediately
+                if (data?.shouldExit || data?.eventStatus === 'ended' || data?.eventStatus === 'cancelled') {
+                    const message = data?.eventStatus === 'ended' 
+                        ? 'Etkinlik sona erdi. Katılımınız için teşekkür ederiz!' 
+                        : 'Etkinlik iptal edildi.';
+                    setInfoMessage(message);
+                    await handleLogout({ keepInfoMessage: true });
+                    return;
+                }
+                
                 if (data?.qandaStopped || data?.status === 'stopped') {
                     setInfoMessage(data?.message || 'Soru gönderimi bitmiştir');
                     await handleLogout({ keepInfoMessage: true });

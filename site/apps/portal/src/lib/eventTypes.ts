@@ -162,7 +162,8 @@ export const TEMPLATE_SELECTION_DEFS: TemplateSelectionDef[] = [
 ];
 
 function parseEnabledEventTypes(raw: string | undefined): SupportedEventType[] {
-    if (!raw || !raw.trim()) return SUPPORTED_EVENT_TYPES;
+    // Default to quiz only for soruyorum.online
+    if (!raw || !raw.trim()) return ["quiz"];
     const parts = raw
         .split(",")
         .map((s) => s.trim().toLowerCase())

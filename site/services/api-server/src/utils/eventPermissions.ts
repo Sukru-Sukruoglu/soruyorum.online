@@ -37,6 +37,15 @@ export function canManageEventSteps(
 ): boolean {
     const gameplay = eventSettings?.gameplay || {};
     
+    // Eğer ayarlar hiç tanımlanmamışsa, herkes (admin, moderator, organizer) yönetebilir
+    const hasAdminSetting = gameplay.adminCanManage !== undefined;
+    const hasModeratorSetting = gameplay.moderatorCanManage !== undefined;
+    
+    // Eğer hiçbir ayar yoksa, varsayılan olarak izin ver (eski davranış)
+    if (!hasAdminSetting && !hasModeratorSetting) {
+        return true;
+    }
+    
     // Varsayılan değerler: admin her zaman yönetebilir, moderator varsayılan kapalı
     const adminCanManage = gameplay.adminCanManage !== false; // undefined veya true ise true
     const moderatorCanManage = gameplay.moderatorCanManage === true;

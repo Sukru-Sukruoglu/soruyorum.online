@@ -4,6 +4,61 @@ import { z } from 'zod';
 
 const router = express.Router();
 
+// Get event info for join page (registration settings)
+router.get('/join-info', async (req, res, next) => {
+    try {
+        const { pin } = req.query;
+        
+        if (!pin || typeof pin !== 'string' || pin.length !== 6) {
+            return res.status(400).json({ error: 'Geçersiz PIN' });
+        }
+
+        const event = await tenantDb.direct.events.findFirst({
+            where: {
+                OR: [{ event_pin: pin }, { pin: pin }],
+            } as any,
+            select: {
+                id: true,
+                name: true,
+                status: true,
+                settings: true,
+            },
+        });
+
+        if (!event) {
+            return res.status(404).json({ error: 'Etkinlik bulunamadı' });
+        }
+
+        // Allow participants to see info before event starts
+        if (event.status !== 'active' && event.status !== 'draft') {
+            return res.status(400).json({
+                error: 'Etkinlik henüz başlamadı veya sona erdi'
+            });
+        }
+
+        const settings = (event as any).settings || {};
+        const registration = settings.registration || {};
+
+        // Return registration settings for dynamic form
+        res.json({
+            success: true,
+            event: {
+                id: event.id,
+                name: event.name,
+            },
+            registration: {
+                requireName: registration.requireName ?? true,
+                requireEmail: registration.requireEmail ?? false,
+                requirePhone: registration.requirePhone ?? false,
+                requireAvatar: registration.requireAvatar ?? false,
+                requireKvkkConsent: registration.requireKvkkConsent ?? false,
+            },
+        });
+    } catch (error) {
+        next(error);
+    }
+});
+
 const joinEventSchema = z.object({
     pin: z.string().length(6, 'PIN 6 haneli olmalıdır'),
     name: z.string().optional(),
@@ -98,6 +153,12 @@ router.post('/join', async (req, res, next) => {
                     requestedName && requestedName.length > 0 && requestedName !== existingParticipant.name
                 );
 
+                // Merge existing metadata with new avatar if provided
+                const existingMetadata = (existingParticipant as any).metadata || {};
+                const updatedMetadata = validatedData.avatar 
+                    ? { ...existingMetadata, avatar: validatedData.avatar }
+                    : existingMetadata;
+
                 const updatedParticipant = shouldUpdateName
                     ? await tenantDb.direct.participants.update({
                         where: { id: existingParticipant.id } as any,
@@ -105,11 +166,12 @@ router.post('/join', async (req, res, next) => {
                             name: requestedName,
                             last_seen_at: new Date(),
                             left_at: null,
+                            metadata: updatedMetadata,
                         } as any,
                     })
                     : await tenantDb.direct.participants.update({
                         where: { id: existingParticipant.id } as any,
-                        data: { last_seen_at: new Date(), left_at: null } as any,
+                        data: { last_seen_at: new Date(), left_at: null, metadata: updatedMetadata } as any,
                     });
 
                 return res.status(200).json({
@@ -233,7 +295,8 @@ router.post('/join', async (req, res, next) => {
                 metadata: {
                     deviceType: validatedData.deviceType,
                     browser: validatedData.browser,
-                    os: validatedData.os
+                    os: validatedData.os,
+                    avatar: validatedData.avatar || null
                 }
             }
         });
@@ -273,17 +336,27 @@ router.post('/heartbeat', async (req, res, next) => {
         });
 
         if (!event) {
-            return res.status(404).json({ error: 'Event not found' });
+            return res.status(404).json({ error: 'Event not found', eventStatus: 'not_found' });
         }
 
         const qandaStopped = Boolean((event as any)?.settings?.qanda?.stopped);
 
+        // Check if event is ended or cancelled - notify client to exit
+        if (event.status === 'ended' || event.status === 'cancelled') {
+            return res.json({ 
+                success: false, 
+                eventStatus: event.status, 
+                shouldExit: true,
+                message: event.status === 'ended' ? 'Etkinlik sona erdi' : 'Etkinlik iptal edildi'
+            });
+        }
+
         if (qandaStopped) {
-            return res.json({ success: true, status: 'stopped', qandaStopped: true, message: 'Soru gönderimi bitmiştir' });
+            return res.json({ success: true, eventStatus: event.status, qandaStopped: true, message: 'Soru gönderimi bitmiştir' });
         }
 
         if (event.status !== 'active' && event.status !== 'draft') {
-            return res.status(400).json({ error: 'Event is not active', status: event.status });
+            return res.status(400).json({ error: 'Event is not active', eventStatus: event.status });
         }
 
         // Update participant lastSeenAt (scoped to event)
@@ -296,7 +369,7 @@ router.post('/heartbeat', async (req, res, next) => {
             return res.status(404).json({ error: 'Participant not found' });
         }
 
-        res.json({ success: true, status: 'ok', qandaStopped: false });
+        res.json({ success: true, eventStatus: event.status, qandaStopped: false });
     } catch (error) {
         next(error);
     }
