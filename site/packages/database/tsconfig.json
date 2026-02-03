@@ -1,0 +1,16 @@
+{
+    "extends": "@ks-interaktif/config/tsconfig.json",
+    "include": [
+        "src"
+    ],
+    "exclude": [
+        "prisma/seed.ts"
+    ],
+    "compilerOptions": {
+        "outDir": "dist",
+        "module": "CommonJS",
+        "declaration": false,
+        "declarationMap": false,
+        "moduleResolution": "node"
+    }
+}

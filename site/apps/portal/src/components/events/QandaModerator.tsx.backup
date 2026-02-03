@@ -1,0 +1,504 @@
+"use client";
+
+import { useState, useEffect, useRef } from "react";
+import { trpc } from "../../utils/trpc";
+import { 
+    Check, 
+    X, 
+    MessageSquare, 
+    RefreshCw, 
+    Users, 
+    Eye,
+    EyeOff,
+    Monitor,
+    StopCircle,
+    ArrowUp,
+    ArrowDown,
+    Undo2,
+    CheckCircle2,
+    XCircle,
+    Timer
+} from "lucide-react";
+
+interface QandaModeratorProps {
+    eventId: string;
+    onStopPresentation?: () => void;
+}
+
+export function QandaModerator({ eventId, onStopPresentation }: QandaModeratorProps) {
+    // State
+    const [anonymousMode, setAnonymousMode] = useState(false);
+    const [showParticipants, setShowParticipants] = useState(true);
+    const [currentShownQuestionId, setCurrentShownQuestionId] = useState<string | null>(null);
+    const [serverTime, setServerTime] = useState<string>("--:--:--");
+    const questionsListRef = useRef<HTMLDivElement>(null);
+
+    // TRPC Queries
+    const { data: questions, refetch: refetchQuestions, isLoading } = trpc.qanda.getQuestions.useQuery(
+        { eventId },
+        { refetchInterval: 3000 } // 3 saniyede bir yenile
+    );
+
+    // Katılımcılar için - event detayından çekelim
+    const { data: eventData } = trpc.events.getById.useQuery(eventId);
+    const participants = eventData?.participants || [];
+
+    // Mutations
+    const updateStatus = trpc.qanda.updateStatus.useMutation({
+        onSuccess: () => refetchQuestions()
+    });
+    const markAsAnswered = trpc.qanda.markAsAnswered.useMutation({
+        onSuccess: () => refetchQuestions()
+    });
+
+    // Server time sync
+    useEffect(() => {
+        const updateTime = () => {
+            const now = new Date();
+            const hours = String(now.getHours()).padStart(2, '0');
+            const minutes = String(now.getMinutes()).padStart(2, '0');
+            const seconds = String(now.getSeconds()).padStart(2, '0');
+            setServerTime(`${hours}:${minutes}:${seconds}`);
+        };
+        updateTime();
+        const interval = setInterval(updateTime, 1000);
+        return () => clearInterval(interval);
+    }, []);
+
+    // Anonymous mode persistence
+    useEffect(() => {
+        const stored = localStorage.getItem(`anonymous_mode_${eventId}`);
+        if (stored === '1') setAnonymousMode(true);
+    }, [eventId]);
+
+    const toggleAnonymousMode = () => {
+        const newValue = !anonymousMode;
+        setAnonymousMode(newValue);
+        localStorage.setItem(`anonymous_mode_${eventId}`, newValue ? '1' : '0');
+    };
+
+    // Question filtering
+    const allQuestions = questions || [];
+    const pendingQuestions = allQuestions.filter((q: any) => q.status === 'pending');
+    const approvedQuestions = allQuestions.filter((q: any) => q.status === 'approved');
+    const rejectedQuestions = allQuestions.filter((q: any) => q.status === 'rejected');
+    const participantCount = participants?.length || 0;
+
+    // Scroll controls
+    const scrollToTop = () => {
+        questionsListRef.current?.scrollTo({ top: 0, behavior: 'smooth' });
+    };
+    const scrollToBottom = () => {
+        if (questionsListRef.current) {
+            questionsListRef.current.scrollTo({ 
+                top: questionsListRef.current.scrollHeight, 
+                behavior: 'smooth' 
+            });
+        }
+    };
+
+    // Manual refresh with visual feedback
+    const [isRefreshing, setIsRefreshing] = useState(false);
+    const handleManualRefresh = async () => {
+        setIsRefreshing(true);
+        await refetchQuestions();
+        setTimeout(() => setIsRefreshing(false), 500);
+    };
+
+    // Show on screen
+    const handleShowOnScreen = (questionId: string) => {
+        setCurrentShownQuestionId(questionId === currentShownQuestionId ? null : questionId);
+        // Burada WebSocket veya API üzerinden ekran uygulamasına bildirim gönderilebilir
+    };
+
+    // Anonymize name
+    const displayName = (name: string) => {
+        if (!anonymousMode) return name;
+        if (!name || name === 'Anonim') return 'Anonim';
+        return `${name.charAt(0)}***`;
+    };
+
+    // Format time
+    const formatTime = (date: string | Date) => {
+        return new Date(date).toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' });
+    };
+
+    if (isLoading) {
+        return (
+            <div className="h-[calc(100vh-200px)] flex items-center justify-center">
+                <div className="text-center">
+                    <RefreshCw className="w-8 h-8 text-indigo-600 animate-spin mx-auto mb-4" />
+                    <p className="text-gray-500">Sorular yükleniyor...</p>
+                </div>
+            </div>
+        );
+    }
+
+    return (
+        <div className="h-[calc(100vh-160px)] flex flex-col bg-gradient-to-br from-indigo-500 via-purple-500 to-pink-500 rounded-2xl overflow-hidden">
+            {/* Header with Stats */}
+            <div className="bg-white/95 backdrop-blur-sm p-4 border-b border-gray-100 shadow-sm">
+                <div className="flex items-center justify-between mb-4">
+                    <div className="flex items-center gap-3">
+                        <h2 className="text-xl font-bold text-gray-900 flex items-center gap-2">
+                            🎯 Moderator Panel
+                        </h2>
+                        <div className="bg-gradient-to-r from-indigo-500 to-purple-500 text-white px-3 py-1 rounded-lg font-semibold text-sm tracking-wider">
+                            {eventId.slice(0, 8).toUpperCase()}
+                        </div>
+                    </div>
+                    
+                    {/* Stats Bar */}
+                    <div className="flex items-center gap-6">
+                        <div className="text-center">
+                            <div className="text-2xl font-bold text-indigo-600">{serverTime}</div>
+                            <div className="text-[10px] text-gray-500 uppercase tracking-wider">Sunucu Saati</div>
+                        </div>
+                        <div className="text-center">
+                            <div className="text-2xl font-bold text-gray-900">{allQuestions.length}</div>
+                            <div className="text-[10px] text-gray-500 uppercase tracking-wider">Toplam Soru</div>
+                        </div>
+                        <div className="text-center">
+                            <div className="text-2xl font-bold text-yellow-600">{pendingQuestions.length}</div>
+                            <div className="text-[10px] text-gray-500 uppercase tracking-wider">Bekleyen</div>
+                        </div>
+                        <div className="text-center">
+                            <div className="text-2xl font-bold text-green-600">{approvedQuestions.length}</div>
+                            <div className="text-[10px] text-gray-500 uppercase tracking-wider">Onaylı</div>
+                        </div>
+                        <div className="text-center">
+                            <div className="text-2xl font-bold text-indigo-600">{participantCount}</div>
+                            <div className="text-[10px] text-gray-500 uppercase tracking-wider">Katılımcı</div>
+                        </div>
+                    </div>
+                </div>
+
+                {/* Action Buttons */}
+                <div className="flex items-center gap-2 flex-wrap">
+                    <button 
+                        onClick={handleManualRefresh}
+                        disabled={isRefreshing}
+                        className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-semibold transition-all ${
+                            isRefreshing 
+                                ? 'bg-green-100 text-green-700' 
+                                : 'bg-green-500 hover:bg-green-600 text-white'
+                        }`}
+                    >
+                        <RefreshCw size={16} className={isRefreshing ? 'animate-spin' : ''} />
+                        {isRefreshing ? 'Yenileniyor...' : 'Yenile'}
+                    </button>
+
+                    <button 
+                        onClick={toggleAnonymousMode}
+                        className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-semibold transition-all ${
+                            anonymousMode 
+                                ? 'bg-green-500 text-white' 
+                                : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+                        }`}
+                    >
+                        {anonymousMode ? <EyeOff size={16} /> : <Eye size={16} />}
+                        🕶️ Anonim: {anonymousMode ? 'Açık' : 'Kapalı'}
+                    </button>
+
+                    <button 
+                        onClick={() => setShowParticipants(!showParticipants)}
+                        className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-semibold transition-all ${
+                            showParticipants 
+                                ? 'bg-indigo-500 text-white' 
+                                : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+                        }`}
+                    >
+                        <Users size={16} />
+                        👥 Katılımcılar
+                    </button>
+
+                    <div className="flex-1" />
+
+                    <button 
+                        onClick={scrollToTop}
+                        className="flex items-center gap-1.5 px-3 py-2 rounded-lg bg-gray-200 text-gray-700 hover:bg-gray-300 text-sm font-semibold transition-all"
+                    >
+                        <ArrowUp size={16} /> En Üste
+                    </button>
+                    <button 
+                        onClick={scrollToBottom}
+                        className="flex items-center gap-1.5 px-3 py-2 rounded-lg bg-indigo-500 text-white hover:bg-indigo-600 text-sm font-semibold transition-all"
+                    >
+                        <ArrowDown size={16} /> En Alta
+                    </button>
+
+                    {onStopPresentation && (
+                        <button 
+                            onClick={onStopPresentation}
+                            className="flex items-center gap-1.5 px-3 py-2 rounded-lg bg-red-500 text-white hover:bg-red-600 text-sm font-semibold transition-all"
+                        >
+                            <StopCircle size={16} />
+                            🛑 Sunumu Durdur
+                        </button>
+                    )}
+                </div>
+            </div>
+
+            {/* Participants Panel (Collapsible) */}
+            {showParticipants && participants && participants.length > 0 && (
+                <div className="bg-white/95 backdrop-blur-sm px-4 py-3 border-b border-gray-100">
+                    <div className="flex items-center justify-between mb-2">
+                        <div className="flex items-center gap-2">
+                            <span className="font-semibold text-gray-900">👥 Katılımcılar</span>
+                            <span className="bg-indigo-500 text-white px-2 py-0.5 rounded-full text-xs font-bold">
+                                {participantCount}
+                            </span>
+                        </div>
+                    </div>
+                    <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-2 max-h-32 overflow-y-auto">
+                        {participants.map((p: any) => (
+                            <div 
+                                key={p.id} 
+                                className="flex items-center gap-2 bg-gray-50 rounded-lg p-2 border border-gray-100"
+                            >
+                                <div className="w-8 h-8 rounded-full bg-gradient-to-br from-indigo-400 to-purple-400 flex items-center justify-center text-white text-xs font-bold">
+                                    {(p.name || 'A').charAt(0).toUpperCase()}
+                                </div>
+                                <div className="flex-1 min-w-0">
+                                    <p className="text-sm font-medium text-gray-900 truncate">
+                                        {displayName(p.name || 'Anonim')}
+                                    </p>
+                                    <div className="flex items-center gap-1">
+                                        <span className={`w-2 h-2 rounded-full ${p.isOnline ? 'bg-green-500' : 'bg-gray-300'}`} />
+                                        <span className="text-[10px] text-gray-500">
+                                            {p.isOnline ? 'Çevrimiçi' : 'Çevrimdışı'}
+                                        </span>
+                                    </div>
+                                </div>
+                            </div>
+                        ))}
+                    </div>
+                </div>
+            )}
+
+            {/* Main Content - Questions Panel */}
+            <div className="flex-1 bg-white/95 backdrop-blur-sm overflow-hidden flex flex-col">
+                <div className="px-4 py-3 border-b border-gray-100 flex items-center justify-between bg-gray-50/50">
+                    <div className="flex items-center gap-3">
+                        <span className="text-lg font-bold text-gray-900">💬 Gelen Sorular</span>
+                        <span className="bg-yellow-100 text-yellow-800 px-2 py-0.5 rounded-full text-xs font-bold border border-yellow-200">
+                            {pendingQuestions.length} Bekleyen
+                        </span>
+                        <span className="bg-green-100 text-green-800 px-2 py-0.5 rounded-full text-xs font-bold border border-green-200">
+                            {approvedQuestions.length} Onaylı
+                        </span>
+                    </div>
+                </div>
+
+                {/* Questions List */}
+                <div 
+                    ref={questionsListRef}
+                    className="flex-1 overflow-y-auto p-4 space-y-4 scroll-smooth"
+                >
+                    {allQuestions.length === 0 ? (
+                        <div className="h-full flex flex-col items-center justify-center text-center py-12">
+                            <div className="w-20 h-20 bg-gray-100 rounded-full flex items-center justify-center mb-4">
+                                <MessageSquare size={40} className="text-gray-300" />
+                            </div>
+                            <p className="text-xl font-bold text-gray-400 mb-2">Henüz soru gelmedi</p>
+                            <p className="text-gray-400 text-sm">Katılımcılar soru gönderdiğinde burada görünecek.</p>
+                        </div>
+                    ) : (
+                        <>
+                            {/* Pending Questions */}
+                            {pendingQuestions.length > 0 && (
+                                <div className="space-y-3">
+                                    <h4 className="text-xs font-bold text-yellow-700 uppercase tracking-widest flex items-center gap-2">
+                                        <Timer size={14} />
+                                        Onay Bekleyenler ({pendingQuestions.length})
+                                    </h4>
+                                    {pendingQuestions.map((q: any) => (
+                                        <div 
+                                            key={q.id} 
+                                            className={`relative bg-white border-2 rounded-xl p-4 transition-all hover:shadow-lg hover:-translate-y-0.5 ${
+                                                currentShownQuestionId === q.id 
+                                                    ? 'border-purple-500 bg-purple-50' 
+                                                    : 'border-yellow-200 hover:border-indigo-300'
+                                            }`}
+                                        >
+                                            {currentShownQuestionId === q.id && (
+                                                <div className="absolute -top-3 right-4 bg-purple-500 text-white text-xs font-bold px-3 py-1 rounded-full">
+                                                    📺 Ekranda Gösteriliyor
+                                                </div>
+                                            )}
+                                            
+                                            <div className="flex items-start justify-between gap-4">
+                                                <div className="flex-1">
+                                                    <div className="flex items-center gap-2 mb-2">
+                                                        <div className="w-8 h-8 rounded-full bg-gradient-to-br from-indigo-400 to-purple-400 flex items-center justify-center text-white text-sm font-bold">
+                                                            {(q.participantName || 'A').charAt(0).toUpperCase()}
+                                                        </div>
+                                                        <span className="font-semibold text-gray-900">
+                                                            {displayName(q.participantName || 'Anonim')}
+                                                        </span>
+                                                        <span className="text-xs text-gray-400">
+                                                            • {formatTime(q.createdAt)}
+                                                        </span>
+                                                    </div>
+                                                    <p className="text-lg text-gray-800 leading-relaxed">
+                                                        {q.questionText}
+                                                    </p>
+                                                </div>
+
+                                                <div className="flex items-center gap-2 shrink-0">
+                                                    <button
+                                                        onClick={() => handleShowOnScreen(q.id)}
+                                                        className={`p-2.5 rounded-lg transition-all ${
+                                                            currentShownQuestionId === q.id
+                                                                ? 'bg-purple-500 text-white'
+                                                                : 'bg-purple-100 text-purple-600 hover:bg-purple-200'
+                                                        }`}
+                                                        title="Ekranda Göster"
+                                                    >
+                                                        <Monitor size={18} />
+                                                    </button>
+                                                    <button
+                                                        onClick={() => updateStatus.mutate({ id: q.id, status: 'rejected' })}
+                                                        className="p-2.5 bg-red-100 text-red-600 hover:bg-red-200 rounded-lg transition-all"
+                                                        title="Reddet"
+                                                    >
+                                                        <X size={18} />
+                                                    </button>
+                                                    <button
+                                                        onClick={() => updateStatus.mutate({ id: q.id, status: 'approved' })}
+                                                        className="p-2.5 bg-green-500 text-white hover:bg-green-600 rounded-lg transition-all shadow-sm"
+                                                        title="Onayla"
+                                                    >
+                                                        <Check size={18} />
+                                                    </button>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
+                            )}
+
+                            {/* Approved Questions */}
+                            {approvedQuestions.length > 0 && (
+                                <div className="space-y-3 mt-6">
+                                    <h4 className="text-xs font-bold text-green-700 uppercase tracking-widest flex items-center gap-2">
+                                        <CheckCircle2 size={14} />
+                                        Onaylanan Sorular ({approvedQuestions.length})
+                                    </h4>
+                                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
+                                        {approvedQuestions.map((q: any) => (
+                                            <div 
+                                                key={q.id} 
+                                                className={`relative bg-green-50 border rounded-xl p-4 transition-all ${
+                                                    currentShownQuestionId === q.id 
+                                                        ? 'border-purple-500 ring-2 ring-purple-200' 
+                                                        : 'border-green-200 hover:border-green-300'
+                                                } ${q.isAnswered ? 'opacity-60' : ''}`}
+                                            >
+                                                {currentShownQuestionId === q.id && (
+                                                    <div className="absolute -top-3 right-4 bg-purple-500 text-white text-xs font-bold px-3 py-1 rounded-full">
+                                                        📺 Ekranda
+                                                    </div>
+                                                )}
+                                                
+                                                <div className="flex items-start justify-between gap-3">
+                                                    <div className="flex-1">
+                                                        <div className="flex items-center gap-2 mb-1">
+                                                            <span className="font-semibold text-gray-700 text-sm">
+                                                                {displayName(q.participantName || 'Anonim')}
+                                                            </span>
+                                                            <span className="text-xs text-gray-400">
+                                                                {formatTime(q.createdAt)}
+                                                            </span>
+                                                            {q.isAnswered && (
+                                                                <span className="bg-blue-100 text-blue-700 text-[10px] font-bold px-2 py-0.5 rounded">
+                                                                    Cevaplanmış
+                                                                </span>
+                                                            )}
+                                                        </div>
+                                                        <p className="text-gray-700">{q.questionText}</p>
+                                                    </div>
+
+                                                    <div className="flex items-center gap-1 shrink-0">
+                                                        <button
+                                                            onClick={() => handleShowOnScreen(q.id)}
+                                                            className={`p-2 rounded-lg transition-all ${
+                                                                currentShownQuestionId === q.id
+                                                                    ? 'bg-purple-500 text-white'
+                                                                    : 'bg-purple-100 text-purple-600 hover:bg-purple-200'
+                                                            }`}
+                                                            title="Ekranda Göster"
+                                                        >
+                                                            <Monitor size={16} />
+                                                        </button>
+                                                        <button
+                                                            onClick={() => markAsAnswered.mutate({ id: q.id, isAnswered: !q.isAnswered })}
+                                                            className={`p-2 rounded-lg transition-all ${
+                                                                q.isAnswered 
+                                                                    ? 'bg-blue-500 text-white' 
+                                                                    : 'bg-blue-100 text-blue-600 hover:bg-blue-200'
+                                                            }`}
+                                                            title={q.isAnswered ? 'Cevaplanmamış yap' : 'Cevaplanmış işaretle'}
+                                                        >
+                                                            <CheckCircle2 size={16} />
+                                                        </button>
+                                                        <button
+                                                            onClick={() => updateStatus.mutate({ id: q.id, status: 'pending' })}
+                                                            className="p-2 bg-gray-100 text-gray-600 hover:bg-gray-200 rounded-lg transition-all"
+                                                            title="Geri Al"
+                                                        >
+                                                            <Undo2 size={16} />
+                                                        </button>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+                            )}
+
+                            {/* Rejected Questions (Collapsed) */}
+                            {rejectedQuestions.length > 0 && (
+                                <details className="mt-6">
+                                    <summary className="text-xs font-bold text-red-700 uppercase tracking-widest cursor-pointer flex items-center gap-2 hover:text-red-800">
+                                        <XCircle size={14} />
+                                        Reddedilen Sorular ({rejectedQuestions.length})
+                                    </summary>
+                                    <div className="mt-3 space-y-2">
+                                        {rejectedQuestions.map((q: any) => (
+                                            <div 
+                                                key={q.id} 
+                                                className="bg-red-50/50 border border-red-100 rounded-xl p-3 opacity-60 hover:opacity-100 transition-opacity"
+                                            >
+                                                <div className="flex items-start justify-between gap-3">
+                                                    <div className="flex-1">
+                                                        <div className="flex items-center gap-2 mb-1">
+                                                            <span className="font-medium text-gray-600 text-sm">
+                                                                {displayName(q.participantName || 'Anonim')}
+                                                            </span>
+                                                            <span className="text-xs text-gray-400">
+                                                                {formatTime(q.createdAt)}
+                                                            </span>
+                                                        </div>
+                                                        <p className="text-gray-500 text-sm line-through">{q.questionText}</p>
+                                                    </div>
+                                                    <button
+                                                        onClick={() => updateStatus.mutate({ id: q.id, status: 'pending' })}
+                                                        className="p-2 bg-gray-100 text-gray-600 hover:bg-gray-200 rounded-lg transition-all"
+                                                        title="Geri Al"
+                                                    >
+                                                        <Undo2 size={14} />
+                                                    </button>
+                                                </div>
+                                            </div>
+                                        ))}
+                                    </div>
+                                </details>
+                            )}
+                        </>
+                    )}
+                </div>
+            </div>
+        </div>
+    );
+}

@@ -1,0 +1,85 @@
+
+> portal@0.0.0 build /srv/webhosting/soruyorum.online/site/apps/portal
+> next build
+
+  ▲ Next.js 14.2.35
+  - Environments: .env.local
+  - Experiments (use with caution):
+    · outputFileTracingRoot
+
+   Creating an optimized production build ...
+ ✓ Compiled successfully
+   Skipping validation of types
+   Skipping linting
+   Collecting page data ...
+   Generating static pages (0/29) ...
+   Generating static pages (7/29) 
+   Generating static pages (14/29) 
+   Generating static pages (21/29) 
+Reports API proxy error: B [Error]: Dynamic server usage: Route /api/reports couldn't be rendered statically because it used `request.headers`. See more info here: https://nextjs.org/docs/messages/dynamic-server-error
+    at V (/srv/webhosting/soruyorum.online/site/node_modules/next/dist/compiled/next-server/app-route.runtime.prod.js:6:21778)
+    at Object.get (/srv/webhosting/soruyorum.online/site/node_modules/next/dist/compiled/next-server/app-route.runtime.prod.js:6:29465)
+    at u (/srv/webhosting/soruyorum.online/site/apps/portal/.next/server/app/api/reports/route.js:1:574)
+    at /srv/webhosting/soruyorum.online/site/node_modules/next/dist/compiled/next-server/app-route.runtime.prod.js:6:38417
+    at /srv/webhosting/soruyorum.online/site/node_modules/next/dist/server/lib/trace/tracer.js:140:36
+    at NoopContextManager.with (/srv/webhosting/soruyorum.online/site/node_modules/next/dist/compiled/@opentelemetry/api/index.js:1:7062)
+    at ContextAPI.with (/srv/webhosting/soruyorum.online/site/node_modules/next/dist/compiled/@opentelemetry/api/index.js:1:518)
+    at NoopTracer.startActiveSpan (/srv/webhosting/soruyorum.online/site/node_modules/next/dist/compiled/@opentelemetry/api/index.js:1:18093)
+    at ProxyTracer.startActiveSpan (/srv/webhosting/soruyorum.online/site/node_modules/next/dist/compiled/@opentelemetry/api/index.js:1:18854)
+    at /srv/webhosting/soruyorum.online/site/node_modules/next/dist/server/lib/trace/tracer.js:122:103 {
+  description: "Route /api/reports couldn't be rendered statically because it used `request.headers`. See more info here: https://nextjs.org/docs/messages/dynamic-server-error",
+  digest: 'DYNAMIC_SERVER_USAGE'
+}
+ ✓ Generating static pages (29/29)
+   Finalizing page optimization ...
+   Collecting build traces ...
+
+Route (app)                              Size     First Load JS
+┌ ○ /                                    151 B          87.6 kB
+├ ○ /_not-found                          879 B          88.3 kB
+├ ○ /api/debug                           0 B                0 B
+├ ƒ /api/events                          0 B                0 B
+├ ƒ /api/events/[...path]                0 B                0 B
+├ ƒ /api/events/[id]/qanda/stop          0 B                0 B
+├ ƒ /api/public/heartbeat                0 B                0 B
+├ ƒ /api/public/join                     0 B                0 B
+├ ƒ /api/public/join-info                0 B                0 B
+├ ƒ /api/public/leave                    0 B                0 B
+├ ƒ /api/public/questions                0 B                0 B
+├ ƒ /api/reports                         0 B                0 B
+├ ƒ /api/reports/[id]/download           0 B                0 B
+├ ƒ /api/trpc/[...trpc]                  0 B                0 B
+├ ○ /dashboard                           3.69 kB         151 kB
+├ ○ /dashboard/reports                   3.09 kB        90.5 kB
+├ ○ /dashboard/settings                  4.16 kB        91.6 kB
+├ ○ /dashboard/stats                     1.84 kB        89.3 kB
+├ ○ /dashboard/workspace                 2 kB           89.4 kB
+├ ○ /events                              1.89 kB         149 kB
+├ ƒ /events/[id]                         2.58 kB         142 kB
+├ ƒ /events/[id]/edit                    24.7 kB         144 kB
+├ ƒ /events/[id]/live                    4.66 kB         111 kB
+├ ○ /events/new                          4.68 kB         162 kB
+├ ○ /events/new/ranking                  5.13 kB        92.5 kB
+├ ○ /events/new/wheeloffortune           11.1 kB         107 kB
+├ ○ /events/new/wordcloud                7.93 kB        99.2 kB
+├ ○ /how-to                              3.98 kB         100 kB
+├ ○ /join                                5.84 kB        93.3 kB
+├ ○ /login                               1.89 kB         113 kB
+├ ƒ /presentation/ranking/[id]           5.01 kB         134 kB
+├ ƒ /presentation/wheeloffortune/[id]    11.7 kB         103 kB
+├ ƒ /presentation/wordcloud/[id]         3.46 kB        94.7 kB
+├ ○ /register                            1.96 kB         113 kB
+├ ○ /settings                            1.87 kB        89.3 kB
+├ ○ /tablet                              983 B          88.4 kB
+└ ƒ /tablet/events/[id]                  1.78 kB         119 kB
++ First Load JS shared by all            87.4 kB
+  ├ chunks/1528-2e9b1aa12eab43a5.js      31.7 kB
+  ├ chunks/1dd3208c-75a682ca32f41c0f.js  53.7 kB
+  └ other shared chunks (total)          2.04 kB
+
+
+ƒ Middleware                             26.5 kB
+
+○  (Static)   prerendered as static content
+ƒ  (Dynamic)  server-rendered on demand
+

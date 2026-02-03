@@ -1,0 +1,13 @@
+{
+    "extends": "@ks-interaktif/config/tsconfig.json",
+    "include": [
+        "src"
+    ],
+    "compilerOptions": {
+        "outDir": "dist",
+        "moduleResolution": "node",
+        "declaration": false,
+        "declarationMap": false,
+        "module": "CommonJS"
+    }
+}

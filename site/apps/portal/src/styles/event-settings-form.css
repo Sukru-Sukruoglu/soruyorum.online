@@ -1,0 +1,413 @@
+/* ============================================ */
+/* EVENT SETTINGS FORM */
+/* ============================================ */
+
+.event-settings-form {
+    background: white;
+    border-radius: 12px;
+    padding: 24px;
+    max-width: 900px;
+    margin: 0 auto;
+}
+
+/* Header */
+.settings-header {
+    margin-bottom: 24px;
+    padding-bottom: 16px;
+    border-bottom: 1px solid #e5e7eb;
+}
+
+.settings-header h2 {
+    font-size: 24px;
+    font-weight: 600;
+    color: #111827;
+    margin: 0 0 4px 0;
+}
+
+.settings-subtitle {
+    font-size: 14px;
+    color: #6b7280;
+    margin: 0;
+}
+
+/* Title Section */
+.title-section {
+    margin-bottom: 24px;
+}
+
+.title-section label {
+    display: block;
+    font-weight: 500;
+    color: #374151;
+    margin-bottom: 8px;
+    font-size: 14px;
+}
+
+.title-section input {
+    width: 100%;
+    padding: 12px;
+    border: 1px solid #d1d5db;
+    border-radius: 8px;
+    font-size: 14px;
+    transition: all 0.2s;
+}
+
+.title-section input:focus {
+    outline: none;
+    border-color: #3b82f6;
+    box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+}
+
+/* ============================================ */
+/* TABS */
+/* ============================================ */
+
+.settings-tabs {
+    display: flex;
+    gap: 4px;
+    border-bottom: 2px solid #e5e7eb;
+    margin-bottom: 24px;
+    overflow-x: auto;
+}
+
+.tab {
+    padding: 12px 20px;
+    background: none;
+    border: none;
+    color: #6b7280;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.2s;
+    position: relative;
+    white-space: nowrap;
+    font-size: 14px;
+}
+
+.tab:hover {
+    color: #3b82f6;
+}
+
+.tab.active {
+    color: #3b82f6;
+}
+
+.tab.active::after {
+    content: '';
+    position: absolute;
+    bottom: -2px;
+    left: 0;
+    right: 0;
+    height: 2px;
+    background: #3b82f6;
+}
+
+/* ============================================ */
+/* TAB CONTENT */
+/* ============================================ */
+
+.tab-content {
+    min-height: 300px;
+    padding: 20px 0;
+}
+
+.tab-description {
+    color: #6b7280;
+    font-size: 14px;
+    margin-bottom: 12px;
+    line-height: 1.6;
+}
+
+.tab-note {
+    color: #9ca3af;
+    font-size: 13px;
+    font-style: italic;
+    margin-bottom: 12px;
+}
+
+.tab-placeholder {
+    text-align: center;
+    color: #9ca3af;
+    padding: 80px 20px;
+    font-size: 16px;
+}
+
+/* ============================================ */
+/* TOGGLE GROUP */
+/* ============================================ */
+
+.toggle-group {
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+}
+
+.toggle-item-wrapper {
+    display: flex;
+    align-items: center;
+    padding: 16px 0;
+    border-bottom: 1px solid #f3f4f6;
+}
+
+.toggle-item-wrapper:last-child {
+    border-bottom: none;
+}
+
+.toggle-item-wrapper.disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+.toggle-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    cursor: pointer;
+    flex: 1;
+}
+
+.toggle-label {
+    color: #374151;
+    font-size: 14px;
+    flex: 1;
+    line-height: 1.5;
+}
+
+.toggle-item input[type="checkbox"] {
+    position: absolute;
+    opacity: 0;
+    width: 0;
+    height: 0;
+}
+
+.toggle-switch {
+    width: 48px;
+    height: 26px;
+    background: #d1d5db;
+    border-radius: 13px;
+    position: relative;
+    transition: background 0.2s;
+    flex-shrink: 0;
+}
+
+.toggle-switch::after {
+    content: '';
+    position: absolute;
+    top: 2px;
+    left: 2px;
+    width: 22px;
+    height: 22px;
+    background: white;
+    border-radius: 50%;
+    transition: transform 0.2s;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.toggle-item input[type="checkbox"]:checked~.toggle-switch {
+    background: #3b82f6;
+}
+
+.toggle-item input[type="checkbox"]:checked~.toggle-switch::after {
+    transform: translateX(22px);
+}
+
+.toggle-item-wrapper.disabled .toggle-switch {
+    background: #f3f4f6;
+}
+
+/* ============================================ */
+/* FORM GROUPS */
+/* ============================================ */
+
+.form-group {
+    margin-bottom: 24px;
+}
+
+.form-group label {
+    display: block;
+    font-weight: 500;
+    color: #374151;
+    margin-bottom: 8px;
+    font-size: 14px;
+}
+
+/* Input Visibility Fixes */
+.title-section input,
+.form-group input[type="number"],
+.form-group input[type="datetime-local"],
+.form-group input[type="text"] {
+    width: 100%;
+    padding: 12px;
+    border: 1px solid #9ca3af;
+    /* Gray-400 */
+    border-radius: 8px;
+    font-size: 14px;
+    color: #111827 !important;
+    /* Gray-900 */
+    background-color: #ffffff;
+    transition: all 0.2s;
+}
+
+.title-section input:focus,
+.form-group input:focus {
+    outline: none;
+    border-color: #3b82f6;
+    box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+}
+
+.field-hint {
+    font-size: 13px;
+    color: #6b7280;
+    margin-top: 6px;
+    line-height: 1.4;
+}
+
+/* ============================================ */
+/* INFO SECTION */
+/* ============================================ */
+
+.info-section {
+    margin-bottom: 24px;
+}
+
+.info-label {
+    font-weight: 500;
+    color: #374151;
+    margin-bottom: 8px;
+    font-size: 14px;
+    display: block;
+}
+
+.info-placeholder {
+    color: #4b5563;
+    /* Gray-600 */
+    font-size: 14px;
+    padding: 16px;
+    background: #f3f4f6;
+    /* Gray-100 */
+    border: 1px dashed #9ca3af;
+    /* Gray-400 dashed */
+    border-radius: 6px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    font-style: italic;
+    min-height: 56px;
+}
+
+/* ============================================ */
+/* DATETIME ACTIONS */
+/* ============================================ */
+
+.datetime-actions {
+    display: flex;
+    gap: 12px;
+    margin-top: 12px;
+}
+
+.btn-datetime {
+    padding: 8px 16px;
+    background: white;
+    border: 1px solid #d1d5db;
+    border-radius: 6px;
+    font-size: 13px;
+    cursor: pointer;
+    transition: all 0.2s;
+    color: #374151;
+    font-weight: 500;
+}
+
+.btn-datetime:hover {
+    background: #f3f4f6;
+    border-color: #9ca3af;
+}
+
+/* ============================================ */
+/* FOOTER BUTTONS */
+/* ============================================ */
+
+.settings-footer {
+    display: flex;
+    justify-content: flex-end;
+    gap: 12px;
+    margin-top: 32px;
+    padding-top: 24px;
+    border-top: 1px solid #e5e7eb;
+}
+
+.btn-cancel {
+    padding: 10px 24px;
+    background: white;
+    border: 1px solid #d1d5db;
+    border-radius: 8px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.2s;
+    color: #374151;
+    font-size: 14px;
+}
+
+.btn-cancel:hover {
+    background: #f9fafb;
+    border-color: #9ca3af;
+}
+
+.btn-submit {
+    padding: 10px 32px;
+    background: #3b82f6;
+    color: white;
+    border: none;
+    border-radius: 8px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: background 0.2s;
+    font-size: 14px;
+}
+
+.btn-submit:hover {
+    background: #2563eb;
+}
+
+.btn-submit:active {
+    background: #1d4ed8;
+}
+
+/* ============================================ */
+/* RESPONSIVE */
+/* ============================================ */
+
+@media (max-width: 768px) {
+    .event-settings-form {
+        padding: 16px;
+    }
+
+    .settings-tabs {
+        -webkit-overflow-scrolling: touch;
+    }
+
+    .tab {
+        padding: 10px 16px;
+        font-size: 13px;
+    }
+
+    .datetime-actions {
+        flex-direction: column;
+    }
+
+    .btn-datetime {
+        width: 100%;
+    }
+
+    .toggle-label {
+        font-size: 13px;
+    }
+
+    .settings-footer {
+        flex-direction: column;
+    }
+
+    .btn-cancel,
+    .btn-submit {
+        width: 100%;
+    }
+}

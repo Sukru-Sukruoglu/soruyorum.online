@@ -1,0 +1,42 @@
+# Traefik routing override (prod)
+services:
+  soruyorum-portal:
+    networks:
+      - default
+      - infra-network
+    labels:
+      - "traefik.enable=true"
+      - "traefik.docker.network=infra-network"
+      - "traefik.http.middlewares.soruyorum-redirect-to-https.redirectscheme.scheme=https"
+      - "traefik.http.middlewares.soruyorum-redirect-to-https.redirectscheme.permanent=true"
+      - "traefik.http.routers.soruyorum-http.entrypoints=http"
+      - "traefik.http.routers.soruyorum-http.rule=Host(`soruyorum.online`) || Host(`www.soruyorum.online`) || Host(`mobil.soruyorum.online`) || Host(`ekran.soruyorum.online`) || Host(`tablet.soruyorum.online`)"
+      - "traefik.http.routers.soruyorum-http.middlewares=soruyorum-redirect-to-https"
+      - "traefik.http.routers.soruyorum-https.entrypoints=https"
+      - "traefik.http.routers.soruyorum-https.rule=Host(`soruyorum.online`) || Host(`www.soruyorum.online`) || Host(`mobil.soruyorum.online`) || Host(`ekran.soruyorum.online`) || Host(`tablet.soruyorum.online`)"
+      - "traefik.http.routers.soruyorum-https.tls=true"
+      - "traefik.http.routers.soruyorum-https.tls.certresolver=letsencrypt"
+      - "traefik.http.services.soruyorum.loadbalancer.server.port=3000"
+
+  soruyorum-api-server:
+    networks:
+      - default
+      - infra-network
+    labels:
+      - "traefik.enable=true"
+      - "traefik.docker.network=infra-network"
+      - "traefik.http.middlewares.soruyorum-api-redirect-to-https.redirectscheme.scheme=https"
+      - "traefik.http.middlewares.soruyorum-api-redirect-to-https.redirectscheme.permanent=true"
+      - "traefik.http.routers.soruyorum-api-http.entrypoints=http"
+      - "traefik.http.routers.soruyorum-api-http.rule=Host(`api.soruyorum.online`)"
+      - "traefik.http.routers.soruyorum-api-http.middlewares=soruyorum-api-redirect-to-https"
+      - "traefik.http.routers.soruyorum-api-https.entrypoints=https"
+      - "traefik.http.routers.soruyorum-api-https.rule=Host(`api.soruyorum.online`)"
+      - "traefik.http.routers.soruyorum-api-https.tls=true"
+      - "traefik.http.routers.soruyorum-api-https.tls.certresolver=letsencrypt"
+      - "traefik.http.services.soruyorum-api.loadbalancer.server.port=4000"
+
+networks:
+  infra-network:
+    external: true
+    name: infra-network

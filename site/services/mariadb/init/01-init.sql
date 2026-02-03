@@ -1,0 +1,14 @@
+CREATE DATABASE IF NOT EXISTS ksinteraktif_esinibul;
+USE ksinteraktif_esinibul;
+
+CREATE TABLE IF NOT EXISTS puanlar (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    isim VARCHAR(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
+    soyisim VARCHAR(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
+    email VARCHAR(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci,
+    sure INT NOT NULL DEFAULT 0,
+    hareket INT NOT NULL DEFAULT 0,
+    seviye INT NOT NULL DEFAULT 1 COMMENT '1=Kolay, 2=Orta, 3=Zor',
+    toplam_puan DECIMAL(10, 2) NOT NULL DEFAULT 0.00,
+    tarih DATETIME DEFAULT CURRENT_TIMESTAMP
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;

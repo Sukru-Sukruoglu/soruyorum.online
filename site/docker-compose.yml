@@ -1,0 +1,73 @@
+# Base compose: soruyorum.online tam ayrim (Traefik label'lari override dosyasinda)
+name: soruyorum
+
+services:
+  soruyorum-portal:
+    image: soruyorum-portal:local
+    build:
+      context: .
+      dockerfile: apps/portal/Dockerfile
+      args:
+        NEXT_PUBLIC_ENABLED_EVENT_TYPES: ${NEXT_PUBLIC_ENABLED_EVENT_TYPES}
+        NEXT_PUBLIC_SITE_VARIANT: ${NEXT_PUBLIC_SITE_VARIANT}
+    ports:
+      - "127.0.0.1:3101:3000"
+    environment:
+      - NODE_ENV=production
+      - DATABASE_URL=postgresql://postgres:${POSTGRES_PASSWORD}@soruyorum-postgres:5432/ks_interaktif_soruyorum?schema=public
+      - API_URL=http://soruyorum-api-server:4000
+      - NEXT_PUBLIC_ENABLED_EVENT_TYPES=${NEXT_PUBLIC_ENABLED_EVENT_TYPES}
+      - NEXT_PUBLIC_SITE_VARIANT=${NEXT_PUBLIC_SITE_VARIANT}
+    depends_on:
+      - soruyorum-api-server
+
+  soruyorum-api-server:
+    image: soruyorum-api-server:local
+    build:
+      context: .
+      dockerfile: services/api-server/Dockerfile
+    ports:
+      - "127.0.0.1:4100:4000"
+    environment:
+      - NODE_ENV=production
+      - DATABASE_URL=postgresql://postgres:${POSTGRES_PASSWORD}@soruyorum-postgres:5432/ks_interaktif_soruyorum?schema=public
+      - REDIS_URL=redis://soruyorum-redis:6379
+      - JWT_SECRET=${JWT_SECRET}
+      - ALLOWED_EVENT_TYPES=quiz
+      # SMS / Phone OTP (optional)
+      # Set SMS_PROVIDER=netgsm to enable real SMS sending
+      - SMS_PROVIDER=${SMS_PROVIDER}
+      - NETGSM_USERNAME=${NETGSM_USERNAME}
+      - NETGSM_PASSWORD=${NETGSM_PASSWORD}
+      - NETGSM_SENDER=${NETGSM_SENDER}
+      - NETGSM_ENDPOINT=${NETGSM_ENDPOINT}
+      # OTP behavior (optional)
+      - PHONE_OTP_SECRET=${PHONE_OTP_SECRET}
+      - PHONE_OTP_TTL_SECONDS=${PHONE_OTP_TTL_SECONDS}
+      - PHONE_OTP_MAX_SENDS_PER_HOUR=${PHONE_OTP_MAX_SENDS_PER_HOUR}
+      - PHONE_OTP_MESSAGE_TEMPLATE=${PHONE_OTP_MESSAGE_TEMPLATE}
+    depends_on:
+      - soruyorum-postgres
+      - soruyorum-redis
+
+  soruyorum-postgres:
+    image: postgres:16-alpine
+    environment:
+      - POSTGRES_DB=ks_interaktif_soruyorum
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+    volumes:
+      - soruyorum_postgres_data:/var/lib/postgresql/data
+
+  soruyorum-redis:
+    image: redis:7-alpine
+    volumes:
+      - soruyorum_redis_data:/data
+
+volumes:
+  soruyorum_postgres_data:
+    external: true
+    name: site_soruyorum_postgres_data
+  soruyorum_redis_data:
+    external: true
+    name: site_soruyorum_redis_data
