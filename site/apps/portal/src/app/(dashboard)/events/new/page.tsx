@@ -30,14 +30,16 @@ const EVENT_TYPES = [
 ];
 
 export default function NewEventPage() {
-    const quizOnly = ENABLED_NEW_EVENT_CARD_DEFS.length === 1 && ENABLED_NEW_EVENT_CARD_DEFS[0]?.type === 'quiz';
-
-    const [filter, setFilter] = useState("Tümü");
     const [showSettings, setShowSettings] = useState(true);
     const [selectedType, setSelectedType] = useState<SupportedEventType>('quiz');
     const [settingsInitialStep, setSettingsInitialStep] = useState<'template' | 'settings' | 'details'>('settings');
     const [selectedTitle, setSelectedTitle] = useState('CANLI SORU');
     const router = useRouter();
+
+    const getCardEventType = (card: (typeof EVENT_TYPES)[number]): SupportedEventType | undefined => {
+        const maybeType = (card as { type?: unknown }).type;
+        return typeof maybeType === 'string' ? (maybeType as SupportedEventType) : undefined;
+    };
 
     const handleCardClick = (type: SupportedEventType, title: string) => {
         setSelectedTitle(title);
@@ -115,7 +117,7 @@ export default function NewEventPage() {
                             key={idx}
                             {...type}
                             onClick={() => {
-                                const maybeDef = (type as any)?.type as SupportedEventType | undefined;
+                                const maybeDef = getCardEventType(type);
                                 if (maybeDef) {
                                     handleCardClick(maybeDef, type.title);
                                 }

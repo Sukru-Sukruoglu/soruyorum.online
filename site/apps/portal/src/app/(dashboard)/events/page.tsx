@@ -108,6 +108,7 @@ export default function EventsPage() {
                             title={event.name}
                             date={new Date(event.createdAt).toLocaleDateString("tr-TR")}
                             participants={event._count?.participants || 0}
+                            pin={String((event as any)?.eventPin ?? (event as any)?.event_pin ?? (event as any)?.pin ?? '').trim() || undefined}
                             status={event.status.toLowerCase()}
                             qandaCount={event.qandaCount}
                             lastQandaAt={event.lastQandaAt}

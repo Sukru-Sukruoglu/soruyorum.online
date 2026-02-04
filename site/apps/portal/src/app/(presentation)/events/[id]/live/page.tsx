@@ -5,11 +5,69 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useParams, useSearchParams } from "next/navigation";
 import { MessageSquare, Users, Quote, UserCheck, PowerOff } from "lucide-react";
 
+const DEFAULT_CF_STREAM_HOST = 'customer-bl0til6mmugr9zxr.cloudflarestream.com';
+
+const DEFAULT_OPENING_BACKGROUND_URL =
+    process.env.NEXT_PUBLIC_OPENING_THEME_BACKGROUND_URL ||
+    'https://imagedelivery.net/prdw3ANMyocSBJD-Do1EeQ/5f3d3fad-f750-4962-9122-4aa2c377aa00/soruyorum';
+
+const DEFAULT_OPENING_VIDEO_URL =
+    process.env.NEXT_PUBLIC_OPENING_THEME_VIDEO_URL ||
+    // Poster-backed iframe is more robust in nested iframes (shows thumbnail even if autoplay is blocked).
+    `https://${DEFAULT_CF_STREAM_HOST}/045897b49be6652b1570cfe649bebbbd/iframe?loop=true&autoplay=true&muted=true&controls=false&poster=${encodeURIComponent(
+        `https://${DEFAULT_CF_STREAM_HOST}/045897b49be6652b1570cfe649bebbbd/thumbnails/thumbnail.jpg?time=&height=600`
+    )}`;
+
+const toCloudflareStreamEmbedUrl = (inputUrlOrId: string, opts?: { loop?: boolean; controls?: boolean }) => {
+    const trimmed = (inputUrlOrId || '').trim();
+    if (!trimmed) return '';
+
+    const idMatch = trimmed.match(/[a-f0-9]{32}/i);
+    if (!idMatch) return '';
+    const videoId = idMatch[0];
+
+    // If the user already provided an iframe URL, keep its host but normalize query params.
+    let url: URL;
+    try {
+        if (/\/iframe(\?|$)/i.test(trimmed) && /^https?:\/\//i.test(trimmed)) {
+            url = new URL(trimmed);
+        } else {
+            // Default: build a customer-domain iframe URL from either /watch, /iframe, or raw ID.
+            const hostMatch = trimmed.match(/^https?:\/\/([^/]+)/i);
+            const host = hostMatch?.[1] || DEFAULT_CF_STREAM_HOST;
+            url = new URL(`https://${host}/${videoId}/iframe`);
+        }
+    } catch {
+        return '';
+    }
+
+    const loop = opts?.loop !== false;
+    const controls = opts?.controls === true;
+    url.searchParams.set('autoplay', 'true');
+    url.searchParams.set('muted', 'true');
+    url.searchParams.set('loop', loop ? 'true' : 'false');
+    url.searchParams.set('controls', controls ? 'true' : 'false');
+
+    // Ensure we have a poster so the background isn't blank if autoplay is blocked.
+    if (!url.searchParams.get('poster')) {
+        url.searchParams.set(
+            'poster',
+            `https://${url.host}/${videoId}/thumbnails/thumbnail.jpg?time=&height=600`
+        );
+    }
+
+    return url.toString();
+};
+
 export default function LiveQandaPage() {
     const params = useParams();
     const eventId = params.id as string;
     const searchParams = useSearchParams();
     const isEmbed = useMemo(() => (searchParams?.get('embed') || '') === '1', [searchParams]);
+    const previewTitleParam = useMemo(() => {
+        if (!isEmbed) return '';
+        return String(searchParams?.get('pt') || '');
+    }, [isEmbed, searchParams]);
     const [anonymousModeFallback, setAnonymousModeFallback] = useState(false);
     const [featuredPulse, setFeaturedPulse] = useState(false);
     const [wallPulseIds, setWallPulseIds] = useState<Record<string, boolean>>({});
@@ -67,8 +125,68 @@ export default function LiveQandaPage() {
         { enabled: !!eventId, refetchInterval: 1000 }
     );
 
-    const themeSettings = (eventData as any)?.theme ?? (eventData as any)?.settings?.theme;
+    const rawThemeSettings = (eventData as any)?.theme ?? (eventData as any)?.settings?.theme;
+    const themeSettings = rawThemeSettings && typeof rawThemeSettings === 'object' ? rawThemeSettings : {};
     const hasThemeBackground = Boolean(themeSettings?.backgroundImage || themeSettings?.background || themeSettings?.backgroundColor);
+
+    const openingBackgroundSetting = (themeSettings as any)?.openingBackgroundUrl;
+    const openingBackgroundRaw =
+        openingBackgroundSetting === undefined || openingBackgroundSetting === null
+            ? DEFAULT_OPENING_BACKGROUND_URL
+            : String(openingBackgroundSetting);
+    const openingBackgroundUrl = (openingBackgroundRaw || '').trim();
+
+    // Backwards compat: allow an explicit openingVideoUrl to override the backdrop.
+    // We no longer default to a video (default is the opening background image).
+    const openingVideoSetting = (themeSettings as any)?.openingVideoUrl;
+    const openingVideoTrimmed = openingVideoSetting === undefined || openingVideoSetting === null
+        ? ''
+        : String(openingVideoSetting).trim();
+    const openingVideoEmbedUrl = openingVideoTrimmed
+        ? toCloudflareStreamEmbedUrl(openingVideoTrimmed, { loop: true, controls: false })
+        : '';
+
+    const hasOpeningBackdrop = Boolean(openingBackgroundUrl) || Boolean(openingVideoEmbedUrl);
+    const openingBackdropLayer = hasOpeningBackdrop ? (
+        <div className="absolute inset-0 z-0">
+            {openingVideoEmbedUrl ? (
+                <iframe
+                    className="absolute inset-0 w-full h-full"
+                    src={openingVideoEmbedUrl}
+                    title="Açılış videosu"
+                    allow="autoplay; fullscreen; encrypted-media; picture-in-picture"
+                    loading="eager"
+                />
+            ) : (
+                <div
+                    className="absolute inset-0"
+                    style={{
+                        backgroundImage: `url(${openingBackgroundUrl})`,
+                        backgroundSize: 'cover',
+                        backgroundPosition: 'center',
+                        backgroundRepeat: 'no-repeat',
+                    }}
+                />
+            )}
+            <div className="absolute inset-0 bg-black/55" />
+        </div>
+    ) : null;
+
+    const DEFAULT_PRESENTATION_TITLE = 'Soru Yorum';
+    const hasPresentationTitle = Object.prototype.hasOwnProperty.call(themeSettings as any, 'presentationTitle');
+    const presentationTitle = hasPresentationTitle
+        ? String((themeSettings as any)?.presentationTitle ?? '')
+        : DEFAULT_PRESENTATION_TITLE;
+
+    const effectivePresentationTitle = String(previewTitleParam || presentationTitle || '').trim() || DEFAULT_PRESENTATION_TITLE;
+
+    // Duvar başlığı tüm etkinliklerde sabit olsun.
+    const wallHeadingTitle = effectivePresentationTitle;
+    const wallHeadingSubtitle = String((themeSettings as any)?.wallSubtitle || 'Yeni sorular otomatik eklenir.');
+    const rotateHeadingTitle = effectivePresentationTitle;
+    const rotateHeadingSubtitle = String((themeSettings as any)?.rotateSubtitle || 'Sorular sırayla gösterilir.');
+
+    const presentationDescription = String((themeSettings as any)?.presentationDescription || '').trim();
 
     const showInstructions = (themeSettings as any)?.showInstructions !== false;
     const showQR = (themeSettings as any)?.showQR !== false;
@@ -177,24 +295,22 @@ export default function LiveQandaPage() {
     };
 
     // Renk paleti ayarlarından yazı renklerini belirle (fallback)
-    const colorPalette = themeSettings?.colorPalette || 'koyu';
+    // Varsayılan: "acik" => beyaz yazı. (Kullanıcı özellikle koyu yazı istiyorsa "koyu" seçer.)
+    const colorPalette = themeSettings?.colorPalette || 'acik';
     const isDarkText = colorPalette === 'koyu';
 
     // If an explicit textColor is provided, prefer it.
+    // Otherwise default to white for better readability on most backgrounds.
     const explicitTextColor = (themeSettings as any)?.textColor as string | undefined;
-    const baseTextColor = explicitTextColor || (isDarkText ? '#1f2937' : '#ffffff');
+    const baseTextColor = explicitTextColor || '#ffffff';
 
     const textColor = baseTextColor;
     const textColorSecondary = explicitTextColor
         ? toRgba(baseTextColor, 0.75, isDarkText ? '#4b5563' : 'rgba(255,255,255,0.7)')
-        : isDarkText
-            ? '#4b5563'
-            : 'rgba(255,255,255,0.7)';
+        : 'rgba(255,255,255,0.7)';
     const textColorMuted = explicitTextColor
         ? toRgba(baseTextColor, 0.55, isDarkText ? '#6b7280' : 'rgba(255,255,255,0.5)')
-        : isDarkText
-            ? '#6b7280'
-            : 'rgba(255,255,255,0.5)';
+        : 'rgba(255,255,255,0.5)';
     
     const themeBackgroundStyle = useMemo<React.CSSProperties | undefined>(() => {
         if (!hasThemeBackground) return undefined;
@@ -482,6 +598,8 @@ export default function LiveQandaPage() {
     if (shouldShowJoin) {
         return (
             <div className="min-h-screen bg-[#0a051d] flex flex-col overflow-hidden relative" style={{ ...(baseStyle || {}), color: textColor }}>
+                {openingBackdropLayer}
+
                 {/* Top Instruction Bar */}
                 {showInstructions ? (
                     <div className="w-full bg-[#450a0a] py-3 px-6 text-center z-50">
@@ -492,7 +610,7 @@ export default function LiveQandaPage() {
                     </div>
                 ) : null}
 
-                {bgAnimationEnabled ? (
+                {!hasOpeningBackdrop && bgAnimationEnabled ? (
                     <div className="absolute inset-0 pointer-events-none z-0">
                         <div className="absolute top-[-20%] left-[-10%] w-[70%] h-[70%] bg-indigo-600/12 rounded-full blur-[140px] animate-pulse"></div>
                         <div className="absolute bottom-[-20%] right-[-10%] w-[60%] h-[60%] bg-purple-600/12 rounded-full blur-[140px] animate-pulse"></div>
@@ -508,7 +626,7 @@ export default function LiveQandaPage() {
                     <img src={rightLogoUrl} alt="Logo" className="absolute z-50 object-contain" style={rightLogoStyle} />
                 ) : null}
 
-                {!hasThemeBackground ? (
+                {!hasOpeningBackdrop && !hasThemeBackground ? (
                     <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[800px] h-[800px] bg-indigo-600/20 rounded-full blur-[120px]"></div>
                 ) : null}
 
@@ -517,8 +635,12 @@ export default function LiveQandaPage() {
                         <div className="w-32 h-32 bg-indigo-500/10 rounded-full flex items-center justify-center mx-auto border border-indigo-500/20 animate-pulse">
                             <MessageSquare size={64} className="text-indigo-400" />
                         </div>
-                        <h1 className="text-6xl font-black tracking-tighter" style={{ color: textColor }}>Soru-Yorum Oturumu</h1>
-                        <p className="text-2xl font-medium" style={{ color: textColorSecondary }}>Sorularınızı göndermek için QR kodu taratın veya PIN kodunu girin.</p>
+                        <h1 className="text-6xl font-black tracking-tighter" style={{ color: textColor }}>
+                            {presentationTitle || DEFAULT_PRESENTATION_TITLE}
+                        </h1>
+                        <p className="text-2xl font-medium" style={{ color: textColorSecondary }}>
+                            {presentationDescription || 'Sorularınızı göndermek için QR kodu taratın veya PIN kodunu girin.'}
+                        </p>
 
                         {/* QR Code and PIN Display */}
                         <div className="flex items-center justify-center gap-8 mt-12">
@@ -562,8 +684,9 @@ export default function LiveQandaPage() {
     if (featuredQuestion?.id && currentQuestion) {
         return (
             <div className="min-h-screen bg-[#0a051d] overflow-hidden relative flex flex-col" style={{ ...(baseStyle || {}), color: textColor }}>
+                {openingBackdropLayer}
                 {/* Background glow + dim */}
-                {!hasThemeBackground ? (
+                {!hasThemeBackground && !hasOpeningBackdrop ? (
                     <div className="absolute inset-0 pointer-events-none">
                         <div className="absolute top-[-20%] left-[-10%] w-[70%] h-[70%] bg-indigo-600/15 rounded-full blur-[140px]"></div>
                         <div className="absolute bottom-[-20%] right-[-10%] w-[60%] h-[60%] bg-purple-600/15 rounded-full blur-[140px]"></div>
@@ -581,7 +704,7 @@ export default function LiveQandaPage() {
                     </div>
                 ) : null}
 
-                {bgAnimationEnabled ? (
+                {!hasOpeningBackdrop && bgAnimationEnabled ? (
                     <div className="absolute inset-0 pointer-events-none z-0">
                         <div className="absolute top-[-20%] left-[-10%] w-[70%] h-[70%] bg-indigo-600/12 rounded-full blur-[140px] animate-pulse"></div>
                         <div className="absolute bottom-[-20%] right-[-10%] w-[60%] h-[60%] bg-purple-600/12 rounded-full blur-[140px] animate-pulse"></div>
@@ -679,7 +802,9 @@ export default function LiveQandaPage() {
     if (effectiveScreenMode === 'rotate' && currentQuestion) {
         return (
             <div className="min-h-screen bg-[#0a051d] overflow-hidden relative flex flex-col" style={{ ...(baseStyle || {}), color: textColor }}>
-                {!hasThemeBackground ? (
+                {openingBackdropLayer}
+
+                {!hasThemeBackground && !hasOpeningBackdrop ? (
                     <div className="absolute inset-0 pointer-events-none">
                         <div className="absolute top-[-25%] left-[-15%] w-[70%] h-[70%] bg-indigo-600/18 rounded-full blur-[140px]"></div>
                         <div className="absolute bottom-[-25%] right-[-15%] w-[60%] h-[60%] bg-purple-600/18 rounded-full blur-[140px]"></div>
@@ -696,7 +821,7 @@ export default function LiveQandaPage() {
                     </div>
                 ) : null}
 
-                {bgAnimationEnabled ? (
+                {!hasOpeningBackdrop && bgAnimationEnabled ? (
                     <div className="absolute inset-0 pointer-events-none z-0">
                         <div className="absolute top-[-20%] left-[-10%] w-[70%] h-[70%] bg-indigo-600/12 rounded-full blur-[140px] animate-pulse"></div>
                         <div className="absolute bottom-[-20%] right-[-10%] w-[60%] h-[60%] bg-purple-600/12 rounded-full blur-[140px] animate-pulse"></div>
@@ -711,6 +836,37 @@ export default function LiveQandaPage() {
                 {rightLogoUrl ? (
                     <img src={rightLogoUrl} alt="Logo" className="absolute z-50 object-contain" style={rightLogoStyle} />
                 ) : null}
+
+                <div className="relative z-10 px-10 pt-10 pb-6">
+                    <div className="flex items-start justify-end">
+                        <div className="bg-black/30 backdrop-blur-md rounded-2xl px-6 py-4 text-right">
+                            <h1 className="text-4xl md:text-5xl font-black tracking-tight drop-shadow-lg" style={{ color: textColor }}>
+                                {rotateHeadingTitle}
+                            </h1>
+                            {rotateHeadingSubtitle.trim() ? (
+                                <p className="font-semibold" style={{ color: textColorSecondary }}>
+                                    {rotateHeadingSubtitle}
+                                </p>
+                            ) : null}
+                        </div>
+                    </div>
+
+                    {showStats ? (
+                        <div className="mt-4 flex items-center justify-end gap-4">
+                            <div className="flex items-center gap-3 bg-green-500/15 rounded-xl px-4 py-3 border border-green-500/25 backdrop-blur-md">
+                                <UserCheck className="text-green-400" size={22} />
+                                <div className="text-left">
+                                    <p className="text-2xl font-black text-green-400 leading-none">{eventData?.participantCount || 0}</p>
+                                    <p className="text-[10px] font-bold text-green-200/50 uppercase tracking-widest">Katılımcı</p>
+                                </div>
+                            </div>
+                            <div className="text-right bg-white/5 rounded-xl px-4 py-3 border border-white/10 backdrop-blur-md">
+                                <p className="text-2xl font-black leading-none" style={{ color: textColor }}>{(renderQuestions?.length || 0) as any}</p>
+                                <p className="text-[10px] font-bold uppercase tracking-widest" style={{ color: textColorMuted }}>Onaylı Soru</p>
+                            </div>
+                        </div>
+                    ) : null}
+                </div>
 
                 <div className="flex-1 flex items-center justify-center p-12 relative z-10">
                     <div className="w-full max-w-6xl">
@@ -760,6 +916,7 @@ export default function LiveQandaPage() {
     // Instagram-wall mode (default when not in spotlight)
     return (
         <div className="min-h-screen bg-[#0a051d] flex flex-col overflow-hidden relative" style={{ ...(baseStyle || {}), color: textColor }}>
+            {openingBackdropLayer}
             {/* Top Instruction Bar */}
             {showInstructions ? (
                 <div className="w-full bg-[#450a0a] py-3 px-6 text-center z-50 shrink-0">
@@ -770,7 +927,7 @@ export default function LiveQandaPage() {
                 </div>
             ) : null}
 
-            {bgAnimationEnabled ? (
+            {!hasOpeningBackdrop && bgAnimationEnabled ? (
                 <div className="absolute inset-0 pointer-events-none z-0">
                     <div className="absolute top-[-25%] left-[-15%] w-[70%] h-[70%] bg-indigo-600/12 rounded-full blur-[140px] animate-pulse"></div>
                     <div className="absolute bottom-[-25%] right-[-15%] w-[60%] h-[60%] bg-purple-600/12 rounded-full blur-[140px] animate-pulse"></div>
@@ -787,7 +944,7 @@ export default function LiveQandaPage() {
             ) : null}
 
             {/* Background Glow */}
-            {!hasThemeBackground ? (
+            {!hasThemeBackground && !hasOpeningBackdrop ? (
                 <div className="absolute inset-0 pointer-events-none">
                     <div className="absolute top-[-25%] left-[-15%] w-[70%] h-[70%] bg-indigo-600/18 rounded-full blur-[140px]"></div>
                     <div className="absolute bottom-[-25%] right-[-15%] w-[60%] h-[60%] bg-purple-600/18 rounded-full blur-[140px]"></div>
@@ -796,12 +953,21 @@ export default function LiveQandaPage() {
             ) : null}
 
             {/* Header */}
-            <div className="relative z-10 px-10 pt-10 pb-6 flex items-end justify-between gap-6">
-                <div className="bg-black/30 backdrop-blur-md rounded-2xl px-6 py-4">
-                    <h1 className="text-5xl font-black tracking-tight drop-shadow-lg" style={{ color: textColor }}>Soru Duvarı</h1>
-                    <p className="font-semibold" style={{ color: textColorSecondary }}>Yeni sorular otomatik eklenir.</p>
+            <div className="relative z-10 px-10 pt-10 pb-6">
+                <div className="flex items-end justify-end">
+                    <div className="bg-black/30 backdrop-blur-md rounded-2xl px-6 py-4 text-right">
+                        <h1 className="text-5xl font-black tracking-tight drop-shadow-lg" style={{ color: textColor }}>
+                            {wallHeadingTitle}
+                        </h1>
+                        {wallHeadingSubtitle.trim() ? (
+                            <p className="font-semibold" style={{ color: textColorSecondary }}>
+                                {wallHeadingSubtitle}
+                            </p>
+                        ) : null}
+                    </div>
                 </div>
-                <div className="flex items-center gap-4">
+
+                <div className="mt-4 flex items-center justify-end gap-4">
                     {showStats ? (
                         <div className="flex items-center gap-3 bg-green-500/15 rounded-xl px-4 py-3 border border-green-500/25 backdrop-blur-md">
                             <UserCheck className="text-green-400" size={22} />

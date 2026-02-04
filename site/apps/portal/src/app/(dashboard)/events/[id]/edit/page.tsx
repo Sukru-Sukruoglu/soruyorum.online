@@ -2,7 +2,6 @@
 
 import { useState, useRef, useEffect, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
-import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Slider } from '@/components/ui/slider';
 import { Switch } from '@/components/ui/switch';
@@ -10,23 +9,15 @@ import {
     Type,
     Palette,
     Target,
-    Play,
-    Share2,
     Lock,
-    ChevronLeft,
-    Plus,
-    Trash2,
     Image as ImageIcon,
-    X,
     ChevronDown,
-    MonitorPlay,
-    StopCircle,
     ArrowLeft,
     ArrowRight
 } from 'lucide-react';
 import CreateEventModal from '@/components/Event/CreateEventModal';
 import { getEvent, updateEvent, Event } from '@/services/api';
-import QRCodeDisplay from '@/components/Event/QRCodeDisplay';
+import { getRoleFromToken, isSuperAdminRole } from '@/utils/auth';
 
 // --- Constants & Types ---
 
@@ -81,6 +72,7 @@ function ScaledIframe({ src, title }: { src: string; title: string }) {
                     height={LIVE_PREVIEW_H}
                     className="block"
                     style={{ border: 0 }}
+                    allow="autoplay; fullscreen; encrypted-media; picture-in-picture"
                     scrolling="no"
                 />
             </div>
@@ -264,6 +256,8 @@ interface Slide {
 
 export default function EventEditorPage({ params }: { params: { id: string } }) {
     const router = useRouter();
+    const DEFAULT_PRESENTATION_TITLE = 'Soru Yorum';
+    const DEFAULT_PRESENTATION_DESCRIPTION = 'Sorularınızı göndermek için QR kodu taratın veya PIN kodunu girin.';
     // --- State ---
     const [slides, setSlides] = useState<Slide[]>([
         {
@@ -287,7 +281,14 @@ export default function EventEditorPage({ params }: { params: { id: string } }) 
     ]);
     const [currentSlideIndex, setCurrentSlideIndex] = useState(0);
     const [activeTab, setActiveTab] = useState('edit');
-    const [presentationTitle, setPresentationTitle] = useState("Başlıksız Sunum");
+    const [presentationTitle, setPresentationTitle] = useState(DEFAULT_PRESENTATION_TITLE);
+    const [presentationDescription, setPresentationDescription] = useState(DEFAULT_PRESENTATION_DESCRIPTION);
+
+    // Live screen headings (Duvar / Tek tek)
+    const [wallHeadingTitle, setWallHeadingTitle] = useState(DEFAULT_PRESENTATION_TITLE);
+    const [wallHeadingSubtitle, setWallHeadingSubtitle] = useState('Yeni sorular otomatik eklenir.');
+    const [rotateHeadingTitle, setRotateHeadingTitle] = useState(DEFAULT_PRESENTATION_TITLE);
+    const [rotateHeadingSubtitle, setRotateHeadingSubtitle] = useState('Sorular sırayla gösterilir.');
 
     // Settings State
     const [showInstructions, setShowInstructions] = useState(true);
@@ -325,7 +326,9 @@ export default function EventEditorPage({ params }: { params: { id: string } }) 
     const [themeSlideshow, setThemeSlideshow] = useState(false);
     const [livePreviewView, setLivePreviewView] = useState<'join' | 'wall' | 'rotate'>('join');
     const [livePreviewAuto, setLivePreviewAuto] = useState(false);
-    const [centerLivePreview, setCenterLivePreview] = useState(true);
+    // Live preview is always enabled (no on/off toggle)
+    const centerLivePreview = true;
+    const [livePreviewNonce, setLivePreviewNonce] = useState(0);
     
     // Hostname state - initialized empty for SSR compatibility
     const [hostName, setHostName] = useState('');
@@ -440,11 +443,23 @@ export default function EventEditorPage({ params }: { params: { id: string } }) 
     const updateThemeSettings = async (patch: Record<string, any>) => {
         if (!eventData) return;
 
+        const nextPatch = { ...(patch || {}) } as Record<string, any>;
+        const changesBackground =
+            'background' in nextPatch || 'backgroundImage' in nextPatch || 'backgroundColor' in nextPatch;
+        // Default opening backdrop (image) / video should be shown only until the user changes the theme/background.
+        // Once they do, explicitly disable it unless they are setting it intentionally.
+        if (changesBackground && !('openingVideoUrl' in nextPatch)) {
+            nextPatch.openingVideoUrl = '';
+        }
+        if (changesBackground && !('openingBackgroundUrl' in nextPatch)) {
+            nextPatch.openingBackgroundUrl = '';
+        }
+
         const prevSettings = (eventData as any)?.settings || {};
         const prevTheme = prevSettings?.theme || {};
         const nextTheme = {
             ...prevTheme,
-            ...patch,
+            ...nextPatch,
         };
         const nextSettings = {
             ...prevSettings,
@@ -454,6 +469,34 @@ export default function EventEditorPage({ params }: { params: { id: string } }) 
         try {
             const updated = await updateEvent(eventData.id, { settings: nextSettings } as any);
             setEventData((prev) => ({ ...(prev as any), ...(updated as any), settings: (updated as any)?.settings ?? nextSettings }));
+            // Reload the center live preview iframe only when needed.
+            // Reloading on every tiny change (e.g. text color) feels like a full page refresh.
+            const reloadKeys = new Set([
+                'style',
+                'primaryColor',
+                'background',
+                'backgroundColor',
+                'backgroundImage',
+                'logo',
+                'logoUrl',
+                'rightLogo',
+                'rightLogoUrl',
+                'qrPos',
+                'showInstructions',
+                'showQR',
+                'showStats',
+                'showNames',
+                'bgAnimation',
+                // Live copy/labels that should reflect in the preview
+                'presentationTitle',
+                'presentationDescription',
+                'wallTitle',
+                'wallSubtitle',
+                'rotateTitle',
+                'rotateSubtitle',
+            ]);
+            const shouldReload = Object.keys(nextPatch || {}).some((k) => reloadKeys.has(k));
+            if (shouldReload) setLivePreviewNonce((v) => v + 1);
         } catch (err) {
             console.error('Tema ayarları kaydetme hatası:', err);
         }
@@ -550,11 +593,20 @@ export default function EventEditorPage({ params }: { params: { id: string } }) 
             try {
                 const data = await getEvent(params.id);
                 setEventData(data);
+
+                // "Sunum Başlığı" is a theme setting (not the event title).
+                const themeSettings = ((data as any)?.settings?.theme || {}) as any;
+                const hasPresentationTitle = Object.prototype.hasOwnProperty.call(themeSettings, 'presentationTitle');
+                const nextPresentationTitle = hasPresentationTitle
+                    ? String((themeSettings as any)?.presentationTitle ?? '')
+                    : DEFAULT_PRESENTATION_TITLE;
+                setPresentationTitle(nextPresentationTitle);
+                lastPersistedTitleRef.current = nextPresentationTitle.trim();
+
                 const initialMode = ((data as any)?.settings?.qanda?.screenMode as string | undefined) || 'wall';
                 setScreenMode(initialMode === 'rotate' ? 'rotate' : 'wall');
                 
                 // Tema ayarlarını slide'lara uygula
-                const themeSettings = (data as any)?.settings?.theme;
                 if (themeSettings) {
                     let themeBackground = THEMES.business; // varsayılan
                     
@@ -615,6 +667,50 @@ export default function EventEditorPage({ params }: { params: { id: string } }) 
                             }))
                         );
                     }
+
+                    if (typeof themeSettings.textColor === 'string' && themeSettings.textColor.trim()) {
+                        const nextTextColor = themeSettings.textColor.trim();
+                        setSlides((prevSlides) =>
+                            prevSlides.map((s) => ({
+                                ...s,
+                                style: {
+                                    ...s.style,
+                                    color: nextTextColor,
+                                },
+                            }))
+                        );
+                    }
+
+                    const hasPresentationDescription = Object.prototype.hasOwnProperty.call(themeSettings as any, 'presentationDescription');
+                    const nextPresentationDescription = hasPresentationDescription
+                        ? String((themeSettings as any)?.presentationDescription || '')
+                        : DEFAULT_PRESENTATION_DESCRIPTION;
+                    setPresentationDescription(nextPresentationDescription);
+                    lastPersistedPresentationDescriptionRef.current = nextPresentationDescription;
+
+                    const hasPresentationTitle = Object.prototype.hasOwnProperty.call(themeSettings as any, 'presentationTitle');
+                    const nextPresentationTitle = hasPresentationTitle
+                        ? String((themeSettings as any)?.presentationTitle ?? '')
+                        : DEFAULT_PRESENTATION_TITLE;
+                    setPresentationTitle(nextPresentationTitle);
+                    lastPersistedTitleRef.current = String(nextPresentationTitle || '').trim();
+
+                    const initialHeadings = {
+                        wallTitle: String(nextPresentationTitle || '').trim() || DEFAULT_PRESENTATION_TITLE,
+                        wallSubtitle: String((themeSettings as any)?.wallSubtitle || 'Yeni sorular otomatik eklenir.'),
+                        rotateTitle: String(nextPresentationTitle || '').trim() || DEFAULT_PRESENTATION_TITLE,
+                        rotateSubtitle: String((themeSettings as any)?.rotateSubtitle || 'Sorular sırayla gösterilir.'),
+                    };
+                    setWallHeadingTitle(initialHeadings.wallTitle);
+                    setWallHeadingSubtitle(initialHeadings.wallSubtitle);
+                    setRotateHeadingTitle(initialHeadings.rotateTitle);
+                    setRotateHeadingSubtitle(initialHeadings.rotateSubtitle);
+                    lastPersistedHeadingsRef.current = {
+                        wallTitle: initialHeadings.wallTitle.trim(),
+                        wallSubtitle: initialHeadings.wallSubtitle.trim(),
+                        rotateTitle: initialHeadings.rotateTitle.trim(),
+                        rotateSubtitle: initialHeadings.rotateSubtitle.trim(),
+                    };
                 }
             } catch (err) {
                 console.error("Failed to fetch event:", err);
@@ -651,6 +747,12 @@ export default function EventEditorPage({ params }: { params: { id: string } }) 
     const fileInputRef = useRef<HTMLInputElement>(null);
     const logoInputRef = useRef<HTMLInputElement>(null);
     const rightLogoInputRef = useRef<HTMLInputElement>(null);
+    const lastPersistedTitleRef = useRef<string>('');
+    const persistTitleTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+    const lastPersistedPresentationDescriptionRef = useRef<string>('');
+    const persistPresentationDescriptionTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+    const lastPersistedHeadingsRef = useRef<{ wallTitle: string; wallSubtitle: string; rotateTitle: string; rotateSubtitle: string } | null>(null);
+    const persistHeadingsTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
     const currentSlide = slides[currentSlideIndex];
     const selectedThemeTextColor = ((eventData as any)?.settings?.theme?.textColor as string | undefined) || currentSlide?.style?.color;
@@ -670,6 +772,138 @@ export default function EventEditorPage({ params }: { params: { id: string } }) 
 
     // --- Actions ---
 
+    const persistPresentationTitle = async (rawTitle: string) => {
+        if (!eventData?.id) return;
+
+        const nextTitle = String(rawTitle || '').trim();
+        if (!nextTitle) return;
+        if (nextTitle === lastPersistedTitleRef.current) return;
+
+        try {
+            await updateThemeSettings({ presentationTitle: nextTitle });
+            lastPersistedTitleRef.current = nextTitle;
+        } catch (err) {
+            console.error('Failed to persist presentation title:', err);
+            alert('Sunum başlığı kaydedilemedi.');
+        }
+    };
+
+    const persistPresentationDescription = async (rawDescription: string) => {
+        if (!eventData?.id) return;
+
+        const nextDescription = String(rawDescription || '').trim();
+        if (nextDescription === lastPersistedPresentationDescriptionRef.current) return;
+
+        await updateThemeSettings({ presentationDescription: nextDescription });
+        lastPersistedPresentationDescriptionRef.current = nextDescription;
+    };
+
+    const persistLiveHeadings = async (raw: { wallTitle: string; wallSubtitle: string; rotateTitle: string; rotateSubtitle: string }) => {
+        if (!eventData?.id) return;
+
+        const effectiveTitle = String(presentationTitle || '').trim() || DEFAULT_PRESENTATION_TITLE;
+
+        const trimmed = {
+            wallTitle: effectiveTitle,
+            wallSubtitle: String(raw.wallSubtitle || '').trim(),
+            rotateTitle: effectiveTitle,
+            rotateSubtitle: String(raw.rotateSubtitle || '').trim(),
+        };
+
+        const last = lastPersistedHeadingsRef.current;
+        if (
+            last &&
+            last.wallTitle === trimmed.wallTitle &&
+            last.wallSubtitle === trimmed.wallSubtitle &&
+            last.rotateTitle === trimmed.rotateTitle &&
+            last.rotateSubtitle === trimmed.rotateSubtitle
+        ) {
+            return;
+        }
+
+        lastPersistedHeadingsRef.current = trimmed;
+        await updateThemeSettings({
+            wallTitle: trimmed.wallTitle,
+            wallSubtitle: trimmed.wallSubtitle,
+            rotateTitle: trimmed.rotateTitle,
+            rotateSubtitle: trimmed.rotateSubtitle,
+        });
+    };
+
+    useEffect(() => {
+        if (!eventData?.id) return;
+
+        const nextTitle = String(presentationTitle || '').trim();
+        if (!nextTitle) return;
+        if (nextTitle === lastPersistedTitleRef.current) return;
+
+        if (persistTitleTimerRef.current) {
+            clearTimeout(persistTitleTimerRef.current);
+        }
+        persistTitleTimerRef.current = setTimeout(() => {
+            void persistPresentationTitle(nextTitle);
+        }, 600);
+
+        return () => {
+            if (persistTitleTimerRef.current) {
+                clearTimeout(persistTitleTimerRef.current);
+                persistTitleTimerRef.current = null;
+            }
+        };
+    }, [presentationTitle, eventData?.id]);
+
+    // Keep Duvar/Tek tek başlıkları Sunum Başlığı ile senkron
+    useEffect(() => {
+        const effectiveTitle = String(presentationTitle || '').trim() || DEFAULT_PRESENTATION_TITLE;
+        setWallHeadingTitle(effectiveTitle);
+        setRotateHeadingTitle(effectiveTitle);
+    }, [presentationTitle]);
+
+    useEffect(() => {
+        if (!eventData?.id) return;
+
+        const nextDescription = String(presentationDescription || '').trim();
+        if (nextDescription === lastPersistedPresentationDescriptionRef.current) return;
+
+        if (persistPresentationDescriptionTimerRef.current) {
+            clearTimeout(persistPresentationDescriptionTimerRef.current);
+        }
+        persistPresentationDescriptionTimerRef.current = setTimeout(() => {
+            void persistPresentationDescription(nextDescription);
+        }, 600);
+
+        return () => {
+            if (persistPresentationDescriptionTimerRef.current) {
+                clearTimeout(persistPresentationDescriptionTimerRef.current);
+                persistPresentationDescriptionTimerRef.current = null;
+            }
+        };
+    }, [presentationDescription, eventData?.id]);
+
+    useEffect(() => {
+        if (!eventData?.id) return;
+
+        if (persistHeadingsTimerRef.current) {
+            clearTimeout(persistHeadingsTimerRef.current);
+        }
+
+        persistHeadingsTimerRef.current = setTimeout(() => {
+            void persistLiveHeadings({
+                wallTitle: wallHeadingTitle,
+                wallSubtitle: wallHeadingSubtitle,
+                rotateTitle: rotateHeadingTitle,
+                rotateSubtitle: rotateHeadingSubtitle,
+            });
+        }, 600);
+
+        return () => {
+            if (persistHeadingsTimerRef.current) {
+                clearTimeout(persistHeadingsTimerRef.current);
+                persistHeadingsTimerRef.current = null;
+            }
+        };
+    }, [wallHeadingTitle, wallHeadingSubtitle, rotateHeadingTitle, rotateHeadingSubtitle, eventData?.id]);
+
     const updateSlide = (key: string, value: any) => {
         const newSlides = [...slides];
         const slide = newSlides[currentSlideIndex];
@@ -683,17 +917,6 @@ export default function EventEditorPage({ params }: { params: { id: string } }) 
             slide[key] = value;
         }
         setSlides(newSlides);
-    };
-
-    const addSlide = () => {
-        const newId = Math.max(...slides.map(s => s.id)) + 1;
-        setSlides([...slides, {
-            ...slides[0],
-            id: newId,
-            question: "Yeni Soru",
-            image: null
-        }]);
-        setCurrentSlideIndex(slides.length);
     };
 
     const deleteSlide = (index: number) => {
@@ -754,7 +977,13 @@ export default function EventEditorPage({ params }: { params: { id: string } }) 
         if (persistThemeLayoutTimerRef.current) clearTimeout(persistThemeLayoutTimerRef.current);
         persistThemeLayoutTimerRef.current = setTimeout(() => {
             lastPersistedThemeLayoutRef.current = snapshot;
-            void updateThemeSettings({ logo, rightLogo, qrPos });
+            void updateThemeSettings({
+                logo,
+                rightLogo,
+                qrPos,
+                // Keep legacy field in sync for older consumers / fallbacks.
+                logoUrl: (logo as any)?.url || null,
+            });
         }, 450);
 
         return () => {
@@ -820,6 +1049,22 @@ export default function EventEditorPage({ params }: { params: { id: string } }) 
         }
     };
 
+    const [role, setRole] = useState<string | null>(null);
+
+    useEffect(() => {
+        try {
+            const token = localStorage.getItem('auth_token') || localStorage.getItem('token');
+            setRole(getRoleFromToken(token));
+        } catch {
+            setRole(null);
+        }
+    }, []);
+
+    const canUseBrandingLogos = useMemo(() => {
+        if (isSuperAdminRole(role)) return true;
+        return !(((eventData as any)?.access?.isFreeOrTrial) ?? true);
+    }, [eventData, role]);
+
     return (
         <div className="h-screen flex flex-col bg-[#f5f7fa] overflow-hidden font-['Inter'] text-[#2c3e50]">
             {/* 
@@ -827,15 +1072,8 @@ export default function EventEditorPage({ params }: { params: { id: string } }) 
         HEADER - Colorful Toolbar
         -----------------------------------------------------------------------
       */}
-            <header className="h-[50px] bg-[#2d3748] flex items-center justify-between px-4 shrink-0 z-50">
-                {/* Left Group - Settings */}
-                <div className="flex items-center gap-1">
-                    <button 
-                        className={`flex items-center gap-1.5 px-3 py-2 rounded text-white text-xs font-semibold transition-all ${anonymousMode ? 'bg-red-600 hover:bg-red-700' : 'bg-gray-500 hover:bg-gray-600'}`}
-                        onClick={() => setAnonymousMode(!anonymousMode)}
-                    >
-                        <span>🕶️</span> {anonymousMode ? 'Anonim Açık' : 'Anonim Kapalı'}
-                    </button>
+            <header className="h-[50px] bg-[#2d3748] flex items-center px-4 shrink-0 z-50">
+                <div className="flex items-center gap-2">
                     {isPresentationStarted ? (
                         <button
                             onClick={handleStopPresentation}
@@ -851,38 +1089,13 @@ export default function EventEditorPage({ params }: { params: { id: string } }) 
                             <span>▶️</span> Sunumu Başlat
                         </button>
                     )}
-                </div>
 
-                {/* Right Group - Navigation */}
-                <div className="flex items-center gap-1">
                     <button
                         onClick={() => router.push(`/events/${params.id}`)}
                         className="flex items-center gap-1.5 px-3 py-2 rounded bg-teal-600 hover:bg-teal-700 text-white text-xs font-semibold transition-all"
                     >
                         <span>🎛️</span> Moderatör Paneli
                     </button>
-                    <button 
-                        className="flex items-center gap-1.5 px-3 py-2 rounded bg-gray-500 hover:bg-gray-600 text-white text-xs font-semibold transition-all"
-                        onClick={() => setCurrentSlideIndex(Math.max(0, currentSlideIndex - 1))}
-                        disabled={currentSlideIndex === 0}
-                    >
-                        <span>←</span> Önceki
-                    </button>
-                    <button 
-                        className="flex items-center gap-1.5 px-3 py-2 rounded bg-gray-500 hover:bg-gray-600 text-white text-xs font-semibold transition-all"
-                        onClick={() => setCurrentSlideIndex(Math.min(slides.length - 1, currentSlideIndex + 1))}
-                        disabled={currentSlideIndex === slides.length - 1}
-                    >
-                        Sonraki <span>→</span>
-                    </button>
-                    {isPresentationStarted && (
-                        <button
-                            onClick={handleStopPresentation}
-                            className="flex items-center gap-1.5 px-3 py-2 rounded bg-red-600 hover:bg-red-700 text-white text-xs font-semibold transition-all"
-                        >
-                            <span>⏹️</span> Sunumu Durdur
-                        </button>
-                    )}
                 </div>
             </header>
 
@@ -891,68 +1104,47 @@ export default function EventEditorPage({ params }: { params: { id: string } }) 
         MAIN CONTAINER
         -----------------------------------------------------------------------
       */}
-            <div className="grid grid-cols-[240px_1fr_340px] flex-1 overflow-hidden">
-
-                {/* LEFT SIDEBAR - SLIDES */}
-                <div className="bg-white border-r border-[#e8ecf1] p-4 overflow-y-auto">
-                    <button className="w-full p-3 bg-red-600 text-white border-none rounded-lg text-sm font-semibold cursor-pointer mb-4 flex items-center justify-center gap-2 hover:bg-red-700 transition-all" onClick={addSlide}>
-                        <Plus className="h-4 w-4" /> Yeni Slayt
-                    </button>
-
-                    <div className="flex flex-col gap-3">
-                        {slides.map((slide, index) => (
-                            <div
-                                key={slide.id}
-                                className={`relative p-2 rounded-lg border-2 cursor-pointer transition-all ${index === currentSlideIndex
-                                    ? 'border-red-500 bg-red-50'
-                                    : 'border-transparent hover:border-[#c1c7d0] bg-[#f5f7fa]'
-                                    }`}
-                                onClick={() => setCurrentSlideIndex(index)}
-                            >
-                                <div className="absolute top-2 left-2 w-6 h-6 rounded bg-white text-[#5e6c84] flex items-center justify-center text-xs font-semibold shadow-sm z-10">
-                                    {index + 1}
-                                </div>
-
-                                {slides.length > 1 && (
-                                    <button
-                                        className="absolute top-1 right-1 w-6 h-6 bg-red-500/80 text-white rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity hover:bg-red-600 z-10 hover:scale-110"
-                                        onClick={(e) => { e.stopPropagation(); deleteSlide(index); }}
-                                    >
-                                        <X className="h-3 w-3" />
-                                    </button>
-                                )}
-
-                                <div 
-                                    className="w-full aspect-video rounded flex items-center justify-center text-xs text-white overflow-hidden relative bg-cover bg-center"
-                                    style={{ 
-                                        background: slide.background.startsWith('url(') 
-                                            ? undefined 
-                                            : slide.background,
-                                        backgroundImage: slide.background.startsWith('url(') 
-                                            ? slide.background 
-                                            : undefined,
-                                        backgroundSize: 'cover',
-                                        backgroundPosition: 'center',
-                                    }}
-                                >
-                                    <div className="absolute inset-0 bg-black/30" />
-                                    <div className="flex flex-col items-center justify-center h-full w-full p-3 relative z-10">
-                                        <div className="font-semibold text-sm mb-2 text-center truncate w-full text-white drop-shadow-lg">{slide.question}</div>
-                                        <div className="text-[10px] opacity-80 text-white">Gönderin</div>
-                                    </div>
-                                </div>
-                                <div className="mt-2 text-[11px] text-[#7f8c97] text-center">Soru Gönder</div>
-                            </div>
-                        ))}
-                    </div>
-                </div>
+            <div className="grid grid-cols-[1fr_340px] flex-1 overflow-hidden">
 
                 {/* CENTER - EDITOR AREA */}
                 <div className="bg-[#f5f7fa] p-8 flex flex-col items-center justify-center gap-4 overflow-auto">
                     <div className="w-full max-w-[960px] flex items-center justify-between gap-3">
                         <div className="flex items-center gap-2">
                             <span className="text-xs font-semibold text-gray-700">🖥️ Canlı Önizleme</span>
-                            <Switch checked={centerLivePreview} onCheckedChange={setCenterLivePreview} />
+
+                            <div className="ml-3 pl-3 border-l border-gray-200 flex items-center gap-2">
+                                <span className="text-[11px] text-gray-500">Slayt</span>
+                                <button
+                                    type="button"
+                                    className="w-7 h-7 rounded-lg bg-white border border-gray-200 hover:border-purple-500 flex items-center justify-center"
+                                    title="Önceki slayt"
+                                    onClick={() => setCurrentSlideIndex((i) => (slides.length ? (i - 1 + slides.length) % slides.length : 0))}
+                                >
+                                    <ArrowLeft className="w-3.5 h-3.5 text-gray-700" />
+                                </button>
+                                <div className="text-[11px] font-semibold text-gray-700 min-w-[64px] text-center">
+                                    {currentSlideIndex + 1}/{slides.length}
+                                </div>
+                                <button
+                                    type="button"
+                                    className="w-7 h-7 rounded-lg bg-white border border-gray-200 hover:border-purple-500 flex items-center justify-center"
+                                    title="Sonraki slayt"
+                                    onClick={() => setCurrentSlideIndex((i) => (slides.length ? (i + 1) % slides.length : 0))}
+                                >
+                                    <ArrowRight className="w-3.5 h-3.5 text-gray-700" />
+                                </button>
+
+                                {slides.length > 1 && (
+                                    <button
+                                        type="button"
+                                        className="px-2.5 py-1.5 rounded-lg bg-white border border-gray-200 text-[11px] font-bold text-gray-700 hover:border-red-400 hover:text-red-600"
+                                        onClick={() => deleteSlide(currentSlideIndex)}
+                                        title="Bu slaytı sil"
+                                    >
+                                        Sil
+                                    </button>
+                                )}
+                            </div>
                         </div>
                         <div className="flex items-center gap-2">
                             <button
@@ -962,7 +1154,7 @@ export default function EventEditorPage({ params }: { params: { id: string } }) 
                                     "px-3 py-2 rounded-lg text-xs font-bold border transition-all " +
                                     (livePreviewView === 'join'
                                         ? 'bg-purple-600 text-white border-purple-600'
-                                        : 'bg-white text-[#2c3e50] border-[#dfe1e6] hover:border-purple-500')
+                                        : 'bg-black/35 text-white border-white/20 hover:bg-black/45 hover:border-white/35')
                                 }
                             >
                                 Join
@@ -974,7 +1166,7 @@ export default function EventEditorPage({ params }: { params: { id: string } }) 
                                     "px-3 py-2 rounded-lg text-xs font-bold border transition-all " +
                                     (livePreviewView === 'wall'
                                         ? 'bg-purple-600 text-white border-purple-600'
-                                        : 'bg-white text-[#2c3e50] border-[#dfe1e6] hover:border-purple-500')
+                                        : 'bg-black/35 text-white border-white/20 hover:bg-black/45 hover:border-white/35')
                                 }
                             >
                                 Duvar
@@ -986,7 +1178,7 @@ export default function EventEditorPage({ params }: { params: { id: string } }) 
                                     "px-3 py-2 rounded-lg text-xs font-bold border transition-all " +
                                     (livePreviewView === 'rotate'
                                         ? 'bg-purple-600 text-white border-purple-600'
-                                        : 'bg-white text-[#2c3e50] border-[#dfe1e6] hover:border-purple-500')
+                                        : 'bg-black/35 text-white border-white/20 hover:bg-black/45 hover:border-white/35')
                                 }
                             >
                                 Tek tek
@@ -1002,7 +1194,7 @@ export default function EventEditorPage({ params }: { params: { id: string } }) 
                         <div className="w-full max-w-[960px] aspect-video rounded-xl shadow-[0_4px_20px_rgba(0,0,0,0.15)] relative overflow-hidden border border-gray-200 bg-black">
                             <ScaledIframe
                                 title="Canlı ekran önizleme (merkez)"
-                                src={`/events/${params.id}/live?view=${livePreviewView}&embed=1`}
+                                src={`/events/${params.id}/live?view=${livePreviewView}&embed=1&v=${livePreviewNonce}&pt=${encodeURIComponent(presentationTitle)}`}
                             />
                         </div>
                     ) : (
@@ -1160,10 +1352,81 @@ export default function EventEditorPage({ params }: { params: { id: string } }) 
                                 <label className="text-[13px] font-semibold text-[#5e6c84] mb-2 block">Sunum Başlığı</label>
                                 <input
                                     className="w-full p-3 border-2 border-[#e0e0e0] rounded-lg text-base focus:border-[#667eea] outline-none transition-all"
-                                    value={currentSlide.question} // Assuming question changes title too as per legacy logic
-                                    onChange={(e) => updateSlide('question', e.target.value)}
+                                    value={presentationTitle}
+                                    onChange={(e) => setPresentationTitle(e.target.value)}
+                                    onBlur={() => void persistPresentationTitle(presentationTitle)}
                                     placeholder="Sunum başlığını yazın..."
                                 />
+                            </div>
+
+                            <div className="mb-6">
+                                <label className="text-[13px] font-semibold text-[#5e6c84] mb-2 block">Sunum Açıklaması</label>
+                                <textarea
+                                    className="w-full p-3 border-2 border-[#e0e0e0] rounded-lg text-sm focus:border-[#667eea] outline-none transition-all resize-none"
+                                    value={presentationDescription}
+                                    onChange={(e) => setPresentationDescription(e.target.value)}
+                                    onBlur={() => void persistPresentationDescription(presentationDescription)}
+                                    placeholder="Kısa bir açıklama yazın..."
+                                    rows={3}
+                                />
+                            </div>
+
+                            <div className="mb-6">
+                                <label className="text-[13px] font-semibold text-[#5e6c84] mb-2 block">Duvar / Tek tek Başlıkları</label>
+
+                                <div className="space-y-3">
+                                    <div>
+                                        <label className="text-xs font-medium text-[#7f8c97] mb-1.5 block">Duvar Başlığı</label>
+                                        <input
+                                            className="w-full p-3 border-2 border-[#e0e0e0] rounded-lg text-sm outline-none transition-all bg-[#f7f8fa] text-[#6b778c] cursor-not-allowed"
+                                            value={wallHeadingTitle}
+                                            disabled
+                                            readOnly
+                                        />
+                                    </div>
+
+                                    <div>
+                                        <label className="text-xs font-medium text-[#7f8c97] mb-1.5 block">Duvar Açıklaması</label>
+                                        <input
+                                            className="w-full p-3 border-2 border-[#e0e0e0] rounded-lg text-sm focus:border-[#667eea] outline-none transition-all"
+                                            value={wallHeadingSubtitle}
+                                            onChange={(e) => setWallHeadingSubtitle(e.target.value)}
+                                            onBlur={() => void persistLiveHeadings({
+                                                wallTitle: wallHeadingTitle,
+                                                wallSubtitle: wallHeadingSubtitle,
+                                                rotateTitle: rotateHeadingTitle,
+                                                rotateSubtitle: rotateHeadingSubtitle,
+                                            })}
+                                            placeholder="Yeni sorular otomatik eklenir."
+                                        />
+                                    </div>
+
+                                    <div>
+                                        <label className="text-xs font-medium text-[#7f8c97] mb-1.5 block">Tek tek Başlığı</label>
+                                        <input
+                                            className="w-full p-3 border-2 border-[#e0e0e0] rounded-lg text-sm outline-none transition-all bg-[#f7f8fa] text-[#6b778c] cursor-not-allowed"
+                                            value={rotateHeadingTitle}
+                                            disabled
+                                            readOnly
+                                        />
+                                    </div>
+
+                                    <div>
+                                        <label className="text-xs font-medium text-[#7f8c97] mb-1.5 block">Tek tek Açıklaması</label>
+                                        <input
+                                            className="w-full p-3 border-2 border-[#e0e0e0] rounded-lg text-sm focus:border-[#667eea] outline-none transition-all"
+                                            value={rotateHeadingSubtitle}
+                                            onChange={(e) => setRotateHeadingSubtitle(e.target.value)}
+                                            onBlur={() => void persistLiveHeadings({
+                                                wallTitle: wallHeadingTitle,
+                                                wallSubtitle: wallHeadingSubtitle,
+                                                rotateTitle: rotateHeadingTitle,
+                                                rotateSubtitle: rotateHeadingSubtitle,
+                                            })}
+                                            placeholder="Sorular sırayla gösterilir."
+                                        />
+                                    </div>
+                                </div>
                             </div>
 
                             {/* Font Settings */}
@@ -1331,103 +1594,167 @@ export default function EventEditorPage({ params }: { params: { id: string } }) 
 
                             {/* Logos */}
                             <div className="mb-6 pt-6 border-t border-[#e2e8f0]">
-                                <label className="text-[13px] font-semibold text-[#5e6c84] mb-3 block">Sunum Logosu</label>
-                                <div className="flex gap-2 mb-3">
-                                    <button className="flex-1 bg-white border border-[#dfe1e6] rounded-md py-2 text-sm font-medium hover:bg-[#f5f7fa]" onClick={() => logoInputRef.current?.click()}>
-                                        📷 Logo Yükle
-                                    </button>
-                                    <input type="file" ref={logoInputRef} className="hidden" accept="image/*" onChange={(e) => handleImageUpload(e, setLogo as any, 'logo')} />
-                                    {logo.url && (
-                                        <button
-                                            className="px-3 rounded-md border transition-colors hover:opacity-90"
-                                            style={{
-                                                color: uiPrimaryHex,
-                                                borderColor: toRgbaFromHex(uiPrimaryHex, 0.25, '#fecaca'),
-                                                backgroundColor: toRgbaFromHex(uiPrimaryHex, 0.08, '#fef2f2'),
-                                            }}
-                                            onClick={() => {
-                                                setLogo((prev) => ({ ...prev, url: null }));
-                                                void updateThemeSettings({ logo: { ...logo, url: null }, logoUrl: null });
-                                            }}
-                                        >
-                                            🗑️
-                                        </button>
+                                <div className="flex items-center justify-between mb-3">
+                                    <label className="text-[13px] font-semibold text-[#5e6c84] block">Sunum Logosu</label>
+                                    {!canUseBrandingLogos && (
+                                        <span className="inline-flex items-center gap-1 text-[11px] font-bold text-amber-700 bg-amber-100 border border-amber-200 px-2 py-1 rounded-full">
+                                            <Lock className="h-3 w-3" /> Pro
+                                        </span>
                                     )}
                                 </div>
-                                {logo.url && (
-                                    <div
-                                        className="space-y-3 pl-2 border-l-2 border-[#e2e8f0]"
-                                        style={{ ['--primary' as any]: uiPrimaryHslVar }}
-                                    >
-                                        <div>
-                                            <div className="flex justify-between text-xs font-semibold mb-1">
-                                                <span className="text-[#7f8c97]">Boyut</span>
-                                                <span style={{ color: uiPrimaryHex }}>{logo.size}px</span>
-                                            </div>
-                                            <Slider min={60} max={800} value={[logo.size]} onValueChange={(val) => setLogo(prev => ({ ...prev, size: val[0] }))} />
-                                        </div>
-                                        <div className="grid grid-cols-2 gap-2">
-                                            <div>
-                                                <span className="text-xs text-[#7f8c97] block mb-1">X Konum</span>
-                                                <Slider min={-400} max={400} value={[logo.x]} onValueChange={(val) => setLogo(prev => ({ ...prev, x: val[0] }))} />
-                                            </div>
-                                            <div>
-                                                <span className="text-xs text-[#7f8c97] block mb-1">Y Konum</span>
-                                                <Slider min={-200} max={600} value={[logo.y]} onValueChange={(val) => setLogo(prev => ({ ...prev, y: val[0] }))} />
-                                            </div>
-                                        </div>
-                                    </div>
-                                )}
 
-                                <div className="mt-4 pt-4 border-t border-dashed border-[#e2e8f0]">
-                                    <label className="text-[13px] font-semibold text-[#5e6c84] mb-3 block">Sağ Logo</label>
-                                    <div className="flex gap-2 mb-3">
-                                        <button className="flex-1 bg-white border border-[#dfe1e6] rounded-md py-2 text-sm font-medium hover:bg-[#f5f7fa]" onClick={() => rightLogoInputRef.current?.click()}>
-                                            📷 Sağ Logo Yükle
-                                        </button>
-                                        <input type="file" ref={rightLogoInputRef} className="hidden" accept="image/*" onChange={(e) => handleImageUpload(e, setRightLogo as any, 'rightLogo')} />
-                                        {rightLogo.url && (
-                                            <button
-                                                className="px-3 rounded-md border transition-colors hover:opacity-90"
-                                                style={{
-                                                    color: uiPrimaryHex,
-                                                    borderColor: toRgbaFromHex(uiPrimaryHex, 0.25, '#fecaca'),
-                                                    backgroundColor: toRgbaFromHex(uiPrimaryHex, 0.08, '#fef2f2'),
-                                                }}
-                                                onClick={() => {
-                                                    setRightLogo((prev) => ({ ...prev, url: null }));
-                                                    void updateThemeSettings({ rightLogo: { ...rightLogo, url: null } });
-                                                }}
-                                            >
-                                                🗑️
-                                            </button>
+                                {!canUseBrandingLogos ? (
+                                    <div className="rounded-lg border border-amber-200 bg-amber-50 p-3">
+                                        <div className="text-sm font-semibold text-amber-900">Logo ekleme Pro plan özelliği</div>
+                                        <div className="text-xs text-amber-800 mt-1">Pro olan kullanıcılar sunuma kendi logolarını ekleyebilir ve konum/ölçü ayarlayabilir.</div>
+
+                                        {(logo.url || rightLogo.url) && (
+                                            <div className="mt-3 text-xs text-amber-900">
+                                                <div className="font-semibold">Mevcut logolar</div>
+                                                <div className="mt-2 flex gap-2">
+                                                    {logo.url && (
+                                                        <button
+                                                            className="px-3 py-2 rounded-md border border-amber-300 bg-white text-amber-900 hover:bg-amber-100"
+                                                            onClick={() => {
+                                                                setLogo((prev) => ({ ...prev, url: null }));
+                                                                void updateThemeSettings({ logo: { ...logo, url: null }, logoUrl: null });
+                                                            }}
+                                                        >
+                                                            Sol Logoyu Kaldır
+                                                        </button>
+                                                    )}
+                                                    {rightLogo.url && (
+                                                        <button
+                                                            className="px-3 py-2 rounded-md border border-amber-300 bg-white text-amber-900 hover:bg-amber-100"
+                                                            onClick={() => {
+                                                                setRightLogo((prev) => ({ ...prev, url: null }));
+                                                                void updateThemeSettings({ rightLogo: { ...rightLogo, url: null } });
+                                                            }}
+                                                        >
+                                                            Sağ Logoyu Kaldır
+                                                        </button>
+                                                    )}
+                                                </div>
+                                            </div>
                                         )}
-                                    </div>
-                                    {rightLogo.url && (
-                                        <div
-                                            className="space-y-3 pl-2 border-l-2 border-[#e2e8f0]"
-                                            style={{ ['--primary' as any]: uiPrimaryHslVar }}
-                                        >
-                                            <div>
-                                                <div className="flex justify-between text-xs font-semibold mb-1">
-                                                    <span className="text-[#7f8c97]">Boyut</span>
-                                                    <span style={{ color: uiPrimaryHex }}>{rightLogo.size}px</span>
-                                                </div>
-                                                <Slider min={60} max={800} value={[rightLogo.size]} onValueChange={(val) => setRightLogo(prev => ({ ...prev, size: val[0] }))} />
-                                            </div>
-                                            <div className="grid grid-cols-2 gap-2">
-                                                <div>
-                                                    <span className="text-xs text-[#7f8c97] block mb-1">X Konum</span>
-                                                    <Slider min={-400} max={400} value={[rightLogo.x]} onValueChange={(val) => setRightLogo(prev => ({ ...prev, x: val[0] }))} />
-                                                </div>
-                                                <div>
-                                                    <span className="text-xs text-[#7f8c97] block mb-1">Y Konum</span>
-                                                    <Slider min={-200} max={600} value={[rightLogo.y]} onValueChange={(val) => setRightLogo(prev => ({ ...prev, y: val[0] }))} />
-                                                </div>
-                                            </div>
+
+                                        <div className="mt-3 flex gap-2">
+                                            <button
+                                                type="button"
+                                                className="px-3 py-2 rounded-md bg-white border border-amber-300 text-amber-900 text-sm font-semibold hover:bg-amber-100"
+                                                onClick={() => router.push('/plans')}
+                                            >
+                                                Planları Gör
+                                            </button>
+                                            <button
+                                                type="button"
+                                                className="px-3 py-2 rounded-md bg-amber-600 text-white text-sm font-semibold hover:bg-amber-700"
+                                                onClick={() => router.push('/dashboard/billing')}
+                                            >
+                                                Pro'ya Geç
+                                            </button>
                                         </div>
-                                    )}
-                                </div>
+                                    </div>
+                                ) : (
+                                    <>
+                                        <div className="flex gap-2 mb-3">
+                                            <button className="flex-1 bg-white border border-[#dfe1e6] rounded-md py-2 text-sm font-medium hover:bg-[#f5f7fa]" onClick={() => logoInputRef.current?.click()}>
+                                                📷 Logo Yükle
+                                            </button>
+                                            <input type="file" ref={logoInputRef} className="hidden" accept="image/*" onChange={(e) => handleImageUpload(e, setLogo as any, 'logo')} />
+                                            {logo.url && (
+                                                <button
+                                                    className="px-3 rounded-md border transition-colors hover:opacity-90"
+                                                    style={{
+                                                        color: uiPrimaryHex,
+                                                        borderColor: toRgbaFromHex(uiPrimaryHex, 0.25, '#fecaca'),
+                                                        backgroundColor: toRgbaFromHex(uiPrimaryHex, 0.08, '#fef2f2'),
+                                                    }}
+                                                    onClick={() => {
+                                                        setLogo((prev) => ({ ...prev, url: null }));
+                                                        void updateThemeSettings({ logo: { ...logo, url: null }, logoUrl: null });
+                                                    }}
+                                                >
+                                                    🗑️
+                                                </button>
+                                            )}
+                                        </div>
+                                        {logo.url && (
+                                            <div
+                                                className="space-y-3 pl-2 border-l-2 border-[#e2e8f0]"
+                                                style={{ ['--primary' as any]: uiPrimaryHslVar }}
+                                            >
+                                                <div>
+                                                    <div className="flex justify-between text-xs font-semibold mb-1">
+                                                        <span className="text-[#7f8c97]">Boyut</span>
+                                                        <span style={{ color: uiPrimaryHex }}>{logo.size}px</span>
+                                                    </div>
+                                                    <Slider min={60} max={800} value={[logo.size]} onValueChange={(val) => setLogo(prev => ({ ...prev, size: val[0] }))} />
+                                                </div>
+                                                <div className="grid grid-cols-2 gap-2">
+                                                    <div>
+                                                        <span className="text-xs text-[#7f8c97] block mb-1">X Konum</span>
+                                                        <Slider min={-400} max={400} value={[logo.x]} onValueChange={(val) => setLogo(prev => ({ ...prev, x: val[0] }))} />
+                                                    </div>
+                                                    <div>
+                                                        <span className="text-xs text-[#7f8c97] block mb-1">Y Konum</span>
+                                                        <Slider min={-200} max={600} value={[logo.y]} onValueChange={(val) => setLogo(prev => ({ ...prev, y: val[0] }))} />
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        )}
+
+                                        <div className="mt-4 pt-4 border-t border-dashed border-[#e2e8f0]">
+                                            <label className="text-[13px] font-semibold text-[#5e6c84] mb-3 block">Sağ Logo</label>
+                                            <div className="flex gap-2 mb-3">
+                                                <button className="flex-1 bg-white border border-[#dfe1e6] rounded-md py-2 text-sm font-medium hover:bg-[#f5f7fa]" onClick={() => rightLogoInputRef.current?.click()}>
+                                                    📷 Sağ Logo Yükle
+                                                </button>
+                                                <input type="file" ref={rightLogoInputRef} className="hidden" accept="image/*" onChange={(e) => handleImageUpload(e, setRightLogo as any, 'rightLogo')} />
+                                                {rightLogo.url && (
+                                                    <button
+                                                        className="px-3 rounded-md border transition-colors hover:opacity-90"
+                                                        style={{
+                                                            color: uiPrimaryHex,
+                                                            borderColor: toRgbaFromHex(uiPrimaryHex, 0.25, '#fecaca'),
+                                                            backgroundColor: toRgbaFromHex(uiPrimaryHex, 0.08, '#fef2f2'),
+                                                        }}
+                                                        onClick={() => {
+                                                            setRightLogo((prev) => ({ ...prev, url: null }));
+                                                            void updateThemeSettings({ rightLogo: { ...rightLogo, url: null } });
+                                                        }}
+                                                    >
+                                                        🗑️
+                                                    </button>
+                                                )}
+                                            </div>
+                                            {rightLogo.url && (
+                                                <div
+                                                    className="space-y-3 pl-2 border-l-2 border-[#e2e8f0]"
+                                                    style={{ ['--primary' as any]: uiPrimaryHslVar }}
+                                                >
+                                                    <div>
+                                                        <div className="flex justify-between text-xs font-semibold mb-1">
+                                                            <span className="text-[#7f8c97]">Boyut</span>
+                                                            <span style={{ color: uiPrimaryHex }}>{rightLogo.size}px</span>
+                                                        </div>
+                                                        <Slider min={60} max={800} value={[rightLogo.size]} onValueChange={(val) => setRightLogo(prev => ({ ...prev, size: val[0] }))} />
+                                                    </div>
+                                                    <div className="grid grid-cols-2 gap-2">
+                                                        <div>
+                                                            <span className="text-xs text-[#7f8c97] block mb-1">X Konum</span>
+                                                            <Slider min={-400} max={400} value={[rightLogo.x]} onValueChange={(val) => setRightLogo(prev => ({ ...prev, x: val[0] }))} />
+                                                        </div>
+                                                        <div>
+                                                            <span className="text-xs text-[#7f8c97] block mb-1">Y Konum</span>
+                                                            <Slider min={-200} max={600} value={[rightLogo.y]} onValueChange={(val) => setRightLogo(prev => ({ ...prev, y: val[0] }))} />
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            )}
+                                        </div>
+                                    </>
+                                )}
                             </div>
 
                             {/* QR Position */}
@@ -1654,211 +1981,141 @@ export default function EventEditorPage({ params }: { params: { id: string } }) 
                                     </div>
                                 </div>
 
-                                {/* Özelleştirme Bölümü */}
-                                <div className="border-t border-gray-200 pt-4">
-                                    <label className="text-[13px] font-semibold text-[#5e6c84] block mb-3">⚙️ Özelleştirme</label>
-                                    
-                                    {/* Yazı Tipi */}
-                                    <div className="mb-3">
-                                        <label className="text-xs font-medium text-gray-600 mb-1 block">Yazı Tipi</label>
-                                        <select
-                                            className="w-full p-2 border border-gray-200 rounded-lg text-sm bg-white focus:border-red-500 outline-none"
-                                            value={currentSlide.style.fontFamily}
-                                                onChange={(e) => {
-                                                    const fontFamily = e.target.value;
-                                                    updateSlide('style.fontFamily', fontFamily);
-                                                    void updateThemeSettings({ fontFamily });
-                                                }}
-                                        >
-                                            {FONTS.map(f => <option key={f.value} value={f.value}>{f.name}</option>)}
-                                        </select>
-                                    </div>
-
-                                    {/* Yazı Rengi */}
-                                    <div className="mb-3">
-                                        <label className="text-xs font-medium text-gray-600 mb-1 block">Yazı Rengi</label>
-                                        <div className="flex gap-1.5 flex-wrap">
-                                            {TEXT_COLORS.map((color) => (
-                                                <button
-                                                    key={color}
-                                                    type="button"
-                                                    onClick={() => void handleTextColorPick(color)}
-                                                    className={`w-7 h-7 rounded-full border-2 transition-all ${
-                                                        selectedThemeTextColor === color ? 'border-red-500 scale-110' : 'border-gray-300'
-                                                    }`}
-                                                    style={{ backgroundColor: color }}
-                                                />
-                                            ))}
-                                        </div>
-                                    </div>
-
-                                    {/* Yazı Boyutu */}
-                                    <div className="mb-3">
-                                        <label className="text-xs font-medium text-gray-600 mb-1 block">Yazı Boyutu: {currentSlide.style.fontSize}px</label>
-                                        <Slider
-                                            value={[currentSlide.style.fontSize]}
-                                            onValueChange={([v]) => updateSlide('style.fontSize', v)}
-                                            min={24}
-                                            max={72}
-                                            step={2}
-                                            className="w-full"
-                                        />
-                                    </div>
-
-                                    {/* Yazı Stilleri */}
-                                    <div className="mb-3">
-                                        <label className="text-xs font-medium text-gray-600 mb-1 block">Yazı Stili</label>
-                                        <div className="flex gap-2">
-                                            <button
-                                                type="button"
-                                                onClick={() => updateSlide('style.bold', !currentSlide.style.bold)}
-                                                className={`w-9 h-9 rounded-lg border-2 flex items-center justify-center font-bold transition-all ${
-                                                    currentSlide.style.bold ? 'bg-red-600 text-white border-red-600' : 'border-gray-300 hover:border-red-400'
-                                                }`}
-                                            >
-                                                B
-                                            </button>
-                                            <button
-                                                type="button"
-                                                onClick={() => updateSlide('style.italic', !currentSlide.style.italic)}
-                                                className={`w-9 h-9 rounded-lg border-2 flex items-center justify-center italic transition-all ${
-                                                    currentSlide.style.italic ? 'bg-red-600 text-white border-red-600' : 'border-gray-300 hover:border-red-400'
-                                                }`}
-                                            >
-                                                I
-                                            </button>
-                                            <button
-                                                type="button"
-                                                onClick={() => updateSlide('style.underline', !currentSlide.style.underline)}
-                                                className={`w-9 h-9 rounded-lg border-2 flex items-center justify-center underline transition-all ${
-                                                    currentSlide.style.underline ? 'bg-red-600 text-white border-red-600' : 'border-gray-300 hover:border-red-400'
-                                                }`}
-                                            >
-                                                U
-                                            </button>
-                                            <button
-                                                type="button"
-                                                onClick={() => updateSlide('style.shadow', !currentSlide.style.shadow)}
-                                                className={`w-9 h-9 rounded-lg border-2 flex items-center justify-center transition-all ${
-                                                    currentSlide.style.shadow ? 'bg-red-600 text-white border-red-600' : 'border-gray-300 hover:border-red-400'
-                                                }`}
-                                                title="Gölge"
-                                            >
-                                                S
-                                            </button>
-                                        </div>
-                                    </div>
-                                </div>
-
                                 {/* Logo Bölümü */}
                                 <div className="border-t border-gray-200 pt-4">
-                                    <label className="text-[13px] font-semibold text-[#5e6c84] block mb-3">🖼️ Logo</label>
-                                    
-                                    <div className="space-y-3">
-                                        <div>
-                                            <label className="text-xs font-medium text-gray-600 mb-1 block">Sol Üst Logo</label>
-                                            <div className="flex gap-2">
-                                                <input
-                                                    type="text"
-                                                    placeholder="Logo URL'si veya yükle"
-                                                    value={logo.url || ''}
-                                                    onChange={(e) => setLogo({ ...logo, url: e.target.value || null })}
-                                                    className="flex-1 p-2 border border-gray-200 rounded-lg text-xs"
-                                                />
-                                                <label className="px-3 py-2 bg-gray-100 hover:bg-gray-200 rounded-lg cursor-pointer text-xs font-medium">
-                                                    Yükle
-                                                    <input type="file" className="hidden" accept="image/*" onChange={(e) => {
-                                                        const file = e.target.files?.[0];
-                                                        if (file) {
-                                                            const reader = new FileReader();
-                                                            reader.onload = (ev) => setLogo({ ...logo, url: ev.target?.result as string });
-                                                            reader.readAsDataURL(file);
-                                                        }
-                                                    }} />
-                                                </label>
+                                    <div className="flex items-center justify-between mb-3">
+                                        <label className="text-[13px] font-semibold text-[#5e6c84] block">🖼️ Logo</label>
+                                        {!canUseBrandingLogos && (
+                                            <span className="inline-flex items-center gap-1 text-[11px] font-bold text-amber-700 bg-amber-100 border border-amber-200 px-2 py-1 rounded-full">
+                                                <Lock className="h-3 w-3" /> Pro
+                                            </span>
+                                        )}
+                                    </div>
+
+                                    {!canUseBrandingLogos ? (
+                                        <div className="rounded-lg border border-amber-200 bg-amber-50 p-3">
+                                            <div className="text-sm font-semibold text-amber-900">Logo ekleme Pro plan özelliği</div>
+                                            <div className="text-xs text-amber-800 mt-1">Pro olan kullanıcılar sunuma kendi logolarını ekleyebilir ve konum/ölçü ayarlayabilir.</div>
+
+                                            {logo.url && (
+                                                <div className="mt-3 text-xs text-amber-900">
+                                                    <div className="font-semibold">Mevcut logolar</div>
+                                                    <div className="mt-2 flex gap-2">
+                                                        <button
+                                                            className="px-3 py-2 rounded-md border border-amber-300 bg-white text-amber-900 hover:bg-amber-100"
+                                                            onClick={() => {
+                                                                setLogo((prev) => ({ ...prev, url: null }));
+                                                                void updateThemeSettings({ logo: { ...logo, url: null }, logoUrl: null });
+                                                            }}
+                                                        >
+                                                            Sol Logoyu Kaldır
+                                                        </button>
+                                                    </div>
+                                                </div>
+                                            )}
+
+                                            <div className="mt-3 flex gap-2">
+                                                <button
+                                                    type="button"
+                                                    className="px-3 py-2 rounded-md bg-white border border-amber-300 text-amber-900 text-sm font-semibold hover:bg-amber-100"
+                                                    onClick={() => router.push('/plans')}
+                                                >
+                                                    Planları Gör
+                                                </button>
+                                                <button
+                                                    type="button"
+                                                    className="px-3 py-2 rounded-md bg-amber-600 text-white text-sm font-semibold hover:bg-amber-700"
+                                                    onClick={() => router.push('/dashboard/billing')}
+                                                >
+                                                    Pro'ya Geç
+                                                </button>
                                             </div>
-                                            {logo.url && (
-                                                <div className="mt-2 flex items-center gap-2">
-                                                    <img src={logo.url} alt="Logo" className="w-10 h-10 object-contain bg-gray-100 rounded" />
-                                                    <button
-                                                        onClick={() => setLogo({ ...logo, url: null })}
-                                                        className="text-xs hover:underline"
-                                                        style={{ color: uiPrimaryHex }}
-                                                    >
-                                                        Kaldır
-                                                    </button>
-                                                </div>
-                                            )}
                                         </div>
-
-                                        <div style={{ ['--primary' as any]: uiPrimaryHslVar }}>
-                                            <label className="text-xs font-medium text-gray-600 mb-1 block">Logo Boyutu: {logo.size}px</label>
-                                            <Slider
-                                                value={[logo.size]}
-                                                onValueChange={([v]) => setLogo({ ...logo, size: v })}
-                                                min={60}
-                                                max={800}
-                                                step={10}
-                                                className="w-full"
-                                            />
-
-                                            {logo.url && (
-                                                <div className="mt-3 grid grid-cols-2 gap-3">
-                                                    <div>
-                                                        <label className="text-xs font-medium text-gray-600 mb-1 block">X Konum: {logo.x}px</label>
-                                                        <Slider
-                                                            value={[logo.x]}
-                                                            onValueChange={([v]) => setLogo({ ...logo, x: v })}
-                                                            min={-400}
-                                                            max={400}
-                                                            step={10}
-                                                            className="w-full"
+                                    ) : (
+                                        <div className="space-y-3">
+                                            <div>
+                                                <label className="text-xs font-medium text-gray-600 mb-1 block">Sol Üst Logo</label>
+                                                <div className="flex gap-2">
+                                                    <input
+                                                        type="text"
+                                                        placeholder="Logo URL'si veya yükle"
+                                                        value={logo.url || ''}
+                                                        onChange={(e) => setLogo({ ...logo, url: e.target.value || null })}
+                                                        className="flex-1 p-2 border border-gray-200 rounded-lg text-xs"
+                                                    />
+                                                    <label className="px-3 py-2 bg-gray-100 hover:bg-gray-200 rounded-lg cursor-pointer text-xs font-medium">
+                                                        Yükle
+                                                        <input
+                                                            type="file"
+                                                            className="hidden"
+                                                            accept="image/*"
+                                                            onChange={(e) => {
+                                                                const file = e.target.files?.[0];
+                                                                if (file) {
+                                                                    const reader = new FileReader();
+                                                                    reader.onload = (ev) => setLogo({ ...logo, url: ev.target?.result as string });
+                                                                    reader.readAsDataURL(file);
+                                                                }
+                                                            }}
                                                         />
-                                                    </div>
-                                                    <div>
-                                                        <label className="text-xs font-medium text-gray-600 mb-1 block">Y Konum: {logo.y}px</label>
-                                                        <Slider
-                                                            value={[logo.y]}
-                                                            onValueChange={([v]) => setLogo({ ...logo, y: v })}
-                                                            min={-200}
-                                                            max={600}
-                                                            step={10}
-                                                            className="w-full"
-                                                        />
-                                                    </div>
+                                                    </label>
                                                 </div>
-                                            )}
+                                                {logo.url && (
+                                                    <div className="mt-2 flex items-center gap-2">
+                                                        <img src={logo.url} alt="Logo" className="w-10 h-10 object-contain bg-gray-100 rounded" />
+                                                        <button
+                                                            onClick={() => setLogo({ ...logo, url: null })}
+                                                            className="text-xs hover:underline"
+                                                            style={{ color: uiPrimaryHex }}
+                                                        >
+                                                            Kaldır
+                                                        </button>
+                                                    </div>
+                                                )}
+                                            </div>
+
+                                            <div style={{ ['--primary' as any]: uiPrimaryHslVar }}>
+                                                <label className="text-xs font-medium text-gray-600 mb-1 block">Logo Boyutu: {logo.size}px</label>
+                                                <Slider
+                                                    value={[logo.size]}
+                                                    onValueChange={([v]) => setLogo({ ...logo, size: v })}
+                                                    min={60}
+                                                    max={800}
+                                                    step={10}
+                                                    className="w-full"
+                                                />
+
+                                                {logo.url && (
+                                                    <div className="mt-3 grid grid-cols-2 gap-3">
+                                                        <div>
+                                                            <label className="text-xs font-medium text-gray-600 mb-1 block">X Konum: {logo.x}px</label>
+                                                            <Slider
+                                                                value={[logo.x]}
+                                                                onValueChange={([v]) => setLogo({ ...logo, x: v })}
+                                                                min={-400}
+                                                                max={400}
+                                                                step={10}
+                                                                className="w-full"
+                                                            />
+                                                        </div>
+                                                        <div>
+                                                            <label className="text-xs font-medium text-gray-600 mb-1 block">Y Konum: {logo.y}px</label>
+                                                            <Slider
+                                                                value={[logo.y]}
+                                                                onValueChange={([v]) => setLogo({ ...logo, y: v })}
+                                                                min={-200}
+                                                                max={600}
+                                                                step={10}
+                                                                className="w-full"
+                                                            />
+                                                        </div>
+                                                    </div>
+                                                )}
+                                            </div>
                                         </div>
-                                    </div>
+                                    )}
                                 </div>
 
-                                {/* Sunum Ayarları */}
-                                <div className="border-t border-gray-200 pt-4">
-                                    <label className="text-[13px] font-semibold text-[#5e6c84] block mb-3">📺 Sunum Ayarları</label>
-                                    
-                                    <div className="space-y-2">
-                                        <div className="flex items-center justify-between">
-                                            <span className="text-xs text-gray-700">Talimat çubuğu göster</span>
-                                            <Switch checked={showInstructions} onCheckedChange={setShowInstructions} />
-                                        </div>
-                                        <div className="flex items-center justify-between">
-                                            <span className="text-xs text-gray-700">QR kodu göster</span>
-                                            <Switch checked={showQR} onCheckedChange={setShowQR} />
-                                        </div>
-                                        <div className="flex items-center justify-between">
-                                            <span className="text-xs text-gray-700">Katılımcı bilgisi göster</span>
-                                            <Switch checked={showStats} onCheckedChange={setShowStats} />
-                                        </div>
-                                        <div className="flex items-center justify-between">
-                                            <span className="text-xs text-gray-700">Katılımcı isimlerini göster</span>
-                                            <Switch checked={showNames} onCheckedChange={setShowNames} />
-                                        </div>
-                                        <div className="flex items-center justify-between">
-                                            <span className="text-xs text-gray-700">Arka plan animasyonu</span>
-                                            <Switch checked={bgAnimation} onCheckedChange={setBgAnimation} />
-                                        </div>
-                                    </div>
-                                </div>
                             </div>
                         </TabsContent>
 

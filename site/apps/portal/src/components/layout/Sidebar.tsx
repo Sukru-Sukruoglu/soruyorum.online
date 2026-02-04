@@ -4,7 +4,8 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 import { LayoutDashboard, BarChart2, FileText, Settings, Briefcase, Crown, LogOut, Users } from "lucide-react";
-import { getRoleFromToken } from "../../utils/auth";
+import { getRoleFromToken, isSuperAdminRole } from "../../utils/auth";
+import { PremiumUpgradePanel } from "../billing/PremiumUpgradePanel";
 
 const NAV_ITEMS = [
     { label: "Etkinliklerim", icon: LayoutDashboard, href: "/dashboard", activeColor: "from-red-600 to-red-700", exact: true },
@@ -17,7 +18,8 @@ const NAV_ITEMS = [
 export function Sidebar() {
     const pathname = usePathname();
     const router = useRouter();
-    const [role, setRole] = useState<string | null>(null);
+    const [role, setRole] = useState<string | null | undefined>(undefined);
+    const [upgradeOpen, setUpgradeOpen] = useState(false);
 
     useEffect(() => {
         try {
@@ -28,8 +30,11 @@ export function Sidebar() {
         }
     }, []);
 
+    const roleResolved = role !== undefined;
+    const shouldShowUpgrade = roleResolved && !isSuperAdminRole(role);
+
     const navItems = useMemo(() => {
-        if (role !== "superadmin") return NAV_ITEMS;
+        if (!isSuperAdminRole(role)) return NAV_ITEMS;
         return [
             ...NAV_ITEMS.slice(0, 4),
             {
@@ -52,6 +57,15 @@ export function Sidebar() {
         }
         router.push('/login');
     };
+
+    useEffect(() => {
+        if (!upgradeOpen) return;
+        const onKeyDown = (e: KeyboardEvent) => {
+            if (e.key === "Escape") setUpgradeOpen(false);
+        };
+        window.addEventListener("keydown", onKeyDown);
+        return () => window.removeEventListener("keydown", onKeyDown);
+    }, [upgradeOpen]);
 
     return (
         <aside className="w-[280px] h-screen fixed left-0 top-0 bg-gradient-to-b from-black to-neutral-900 border-r border-brand-primary/20 flex flex-col z-40">
@@ -107,31 +121,80 @@ export function Sidebar() {
             </nav>
 
             {/* Upgrade Card (Sticky Bottom) */}
-            <div className="p-4 mt-auto">
-                <div className="bg-gradient-to-br from-black to-brand-dark border border-brand-primary/30 rounded-2xl p-5 relative overflow-hidden group">
-                    <div className="absolute top-0 right-0 p-2 opacity-10 group-hover:opacity-20 transition-opacity">
-                        <Crown size={80} />
-                    </div>
-
-                    <div className="flex items-center gap-3 mb-3 relative z-10">
-                        <div className="p-2 bg-gradient-to-br from-yellow-400 to-orange-500 rounded-lg shadow-lg">
-                            <Crown size={20} className="text-white" />
+            {shouldShowUpgrade && (
+                <div className="p-4 mt-auto">
+                    <div className="bg-gradient-to-br from-black to-brand-dark border border-brand-primary/30 rounded-2xl p-5 relative overflow-hidden group">
+                        <div className="absolute top-0 right-0 p-2 opacity-10 group-hover:opacity-20 transition-opacity">
+                            <Crown size={80} />
                         </div>
-                        <h3 className="text-white font-bold">Premium'a Geç</h3>
+
+                        <div className="flex items-center gap-3 mb-3 relative z-10">
+                            <div className="p-2 bg-gradient-to-br from-yellow-400 to-orange-500 rounded-lg shadow-lg">
+                                <Crown size={20} className="text-white" />
+                            </div>
+                            <h3 className="text-white font-bold">Premium'a Geç</h3>
+                        </div>
+
+                        <p className="text-gray-400 text-xs mb-4 relative z-10 leading-relaxed">
+                            Tüm özelliklerin ve şablonların kilidini açın.
+                        </p>
+
+                        <button
+                            type="button"
+                            onClick={() => setUpgradeOpen(true)}
+                            className="block text-center w-full py-2.5 bg-white text-brand-primary font-bold text-sm rounded-lg hover:bg-gray-100 transition-colors shadow-lg relative z-10"
+                        >
+                            Yükselt
+                        </button>
+
+                        {/* Hover Glow */}
+                        <div className="absolute -inset-[100%] bg-white/5 blur-3xl group-hover:inset-0 transition-all duration-700" />
                     </div>
-
-                    <p className="text-gray-400 text-xs mb-4 relative z-10 leading-relaxed">
-                        Tüm özelliklerin ve şablonların kilidini açın.
-                    </p>
-
-                    <button className="w-full py-2.5 bg-white text-brand-primary font-bold text-sm rounded-lg hover:bg-gray-100 transition-colors shadow-lg relative z-10">
-                        Yükselt
-                    </button>
-
-                    {/* Hover Glow */}
-                    <div className="absolute -inset-[100%] bg-white/5 blur-3xl group-hover:inset-0 transition-all duration-700" />
                 </div>
-            </div>
+            )}
+
+            {shouldShowUpgrade && upgradeOpen && (
+                <div
+                    className="fixed inset-0 z-50"
+                    role="dialog"
+                    aria-modal="true"
+                    aria-label="Premium'a Geç"
+                >
+                    <button
+                        type="button"
+                        className="absolute inset-0 bg-black/60"
+                        onClick={() => setUpgradeOpen(false)}
+                        aria-label="Kapat"
+                    />
+
+                    <div className="absolute inset-0 p-4 sm:p-8 overflow-y-auto">
+                        <div className="mx-auto max-w-5xl rounded-2xl bg-[#F8F8F8] border border-white/10 shadow-2xl">
+                            <div className="p-4 sm:p-6 flex items-center justify-between">
+                                <div className="text-gray-900 font-black text-lg">Premium'a Geç</div>
+                                <div className="flex items-center gap-3">
+                                    <Link
+                                        href="/dashboard/billing"
+                                        className="text-sm text-gray-600 hover:text-gray-900 underline"
+                                        onClick={() => setUpgradeOpen(false)}
+                                    >
+                                        Sayfada aç
+                                    </Link>
+                                    <button
+                                        type="button"
+                                        onClick={() => setUpgradeOpen(false)}
+                                        className="px-3 py-2 rounded-lg border border-gray-200 bg-white hover:bg-gray-50 text-gray-700"
+                                    >
+                                        Kapat
+                                    </button>
+                                </div>
+                            </div>
+                            <div className="p-4 sm:p-6 pt-0">
+                                <PremiumUpgradePanel showHeader={false} showRefresh={true} />
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            )}
         </aside>
     );
 }

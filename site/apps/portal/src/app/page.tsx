@@ -39,6 +39,9 @@ export default function LandingPage() {
                         <a href="#how" className="hidden md:block px-4 py-2 text-white/60 hover:text-white hover:bg-white/5 rounded-lg text-sm font-medium transition-all">
                             Nasıl Çalışır
                         </a>
+                        <Link href="/plans" className="hidden md:block px-4 py-2 text-white/60 hover:text-white hover:bg-white/5 rounded-lg text-sm font-medium transition-all">
+                            Planlar
+                        </Link>
                         <Link href="/login" className="px-4 py-2 text-white/60 hover:text-white hover:bg-white/5 rounded-lg text-sm font-medium transition-all">
                             Giriş Yap
                         </Link>
@@ -177,6 +180,7 @@ export default function LandingPage() {
                     </div>
                     <div className="flex gap-6">
                         <Link href="/kvkk" className="text-white/60 text-sm hover:text-white transition-colors">KVKK</Link>
+                        <Link href="/plans" className="text-white/60 text-sm hover:text-white transition-colors">Planlar</Link>
                         <Link href="/login" className="text-white/60 text-sm hover:text-white transition-colors">Giriş Yap</Link>
                         <Link href="/register" className="text-white/60 text-sm hover:text-white transition-colors">Kayıt Ol</Link>
                     </div>

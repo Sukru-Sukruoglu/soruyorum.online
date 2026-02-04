@@ -2,7 +2,27 @@ import { router, publicProcedure, protectedProcedure } from "../trpc";
 import { z } from "zod";
 import { TRPCError } from "@trpc/server";
 import crypto from 'crypto';
-import { requireEventManagePermission, getEventPermissions } from '../utils/eventPermissions';
+import { isSuperAdmin } from "../utils/access";
+
+function normalizeRole(role: unknown): string {
+    return (typeof role === 'string' ? role : '').trim().toLowerCase();
+}
+
+function hasQandaModerationPermission(user: { role?: string | null; email?: string | null } | null | undefined): boolean {
+    if (!user) return false;
+    if (isSuperAdmin(user)) return true;
+    const role = normalizeRole(user.role);
+    return role === 'admin' || role === 'moderator' || role === 'organizer';
+}
+
+function requireQandaModerationPermission(user: { role?: string | null; email?: string | null } | null | undefined, action: string): void {
+    if (!hasQandaModerationPermission(user)) {
+        throw new TRPCError({
+            code: 'FORBIDDEN',
+            message: `You don't have permission to ${action}.`,
+        });
+    }
+}
 
 export const qandaRouter = router({
     // Public: Participants ask questions
@@ -142,12 +162,10 @@ export const qandaRouter = router({
             });
 
             if (!submission || submission.events.organization_id !== ctx.user.organizationId) {
-                throw new TRPCError({ code: "FORBIDDEN" });
+                throw new TRPCError({ code: "FORBIDDEN", message: "QANDA_EVENT_ACCESS_DENIED" });
             }
 
-            // Check if user has permission to manage event steps
-            const eventSettings = submission.events.settings as any;
-            requireEventManagePermission(ctx.user.role, eventSettings, 'moderate questions');
+            requireQandaModerationPermission(ctx.user, 'moderate questions');
 
             return ctx.prisma.qanda_submissions.update({
                 where: { id: input.id },
@@ -169,12 +187,10 @@ export const qandaRouter = router({
             });
 
             if (!submission || submission.events.organization_id !== ctx.user.organizationId) {
-                throw new TRPCError({ code: "FORBIDDEN" });
+                throw new TRPCError({ code: "FORBIDDEN", message: "QANDA_EVENT_ACCESS_DENIED" });
             }
 
-            // Check if user has permission to manage event steps
-            const eventSettings = submission.events.settings as any;
-            requireEventManagePermission(ctx.user.role, eventSettings, 'mark questions as answered');
+            requireQandaModerationPermission(ctx.user, 'mark questions as answered');
 
             return ctx.prisma.qanda_submissions.update({
                 where: { id: input.id },
@@ -195,12 +211,10 @@ export const qandaRouter = router({
             });
 
             if (!submission || submission.events.organization_id !== ctx.user.organizationId) {
-                throw new TRPCError({ code: "FORBIDDEN" });
+                throw new TRPCError({ code: "FORBIDDEN", message: "QANDA_EVENT_ACCESS_DENIED" });
             }
 
-            // Check if user has permission to manage event steps
-            const eventSettings = submission.events.settings as any;
-            requireEventManagePermission(ctx.user.role, eventSettings, 'delete questions');
+            requireQandaModerationPermission(ctx.user, 'delete questions');
 
             return ctx.prisma.qanda_submissions.delete({
                 where: { id: input.id }
@@ -223,9 +237,7 @@ export const qandaRouter = router({
                 throw new TRPCError({ code: 'FORBIDDEN', message: 'Event access denied' });
             }
 
-            // Check if user has permission to manage event steps
-            const eventSettings = event.settings as any;
-            requireEventManagePermission(ctx.user.role, eventSettings, 'set featured question');
+            requireQandaModerationPermission(ctx.user, 'set featured question');
 
             if (input.questionId) {
                 const question = await ctx.prisma.qanda_submissions.findFirst({

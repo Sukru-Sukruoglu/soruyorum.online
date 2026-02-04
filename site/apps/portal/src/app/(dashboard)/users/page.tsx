@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Search, Shield } from "lucide-react";
 import { trpc } from "../../../utils/trpc";
-import { getRoleFromToken } from "../../../utils/auth";
+import { getRoleFromToken, isSuperAdminRole } from "../../../utils/auth";
 
 function formatDate(value: string | Date) {
     try {
@@ -28,7 +28,7 @@ export default function UsersPage() {
             const token = localStorage.getItem("auth_token") || localStorage.getItem("token");
             const r = getRoleFromToken(token);
             setRole(r);
-            if (r !== "superadmin") {
+            if (!isSuperAdminRole(r)) {
                 router.replace("/dashboard");
             }
         } catch {
@@ -38,7 +38,7 @@ export default function UsersPage() {
     }, [router]);
 
     const { data, isLoading, error } = trpc.users.list.useQuery(undefined, {
-        enabled: role === "superadmin",
+        enabled: isSuperAdminRole(role),
         retry: false,
     });
 

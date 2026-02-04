@@ -6,6 +6,8 @@ import { AuditLogger } from '../database/auditLog';
 import { z } from 'zod';
 import { randomUUID } from 'crypto';
 import { generateShortLivedToken } from '../utils/jwt';
+import { canManageEventSteps } from '../utils/eventPermissions';
+import { getOrganizationAccess, isSuperAdmin } from '../utils/access';
 
 const router = express.Router();
 router.use(tenantContextMiddleware);
@@ -222,6 +224,13 @@ router.get('/', async (req, res, next) => {
 
 router.get('/:id', async (req, res, next) => {
     try {
+        const access = await getOrganizationAccess(tenantDb.direct as any, req.organizationId!);
+        const effectiveAccess = isSuperAdmin({ role: req.userRole, email: req.userEmail })
+            ? {
+                  ...access,
+                  isFreeOrTrial: false,
+              }
+            : access;
         const event = await tenantDb.findUnique('event', req.organizationId!, {
             where: { id: req.params.id },
             include: {
@@ -238,7 +247,7 @@ router.get('/:id', async (req, res, next) => {
             return res.status(404).json({ error: 'Etkinlik bulunamadı' });
         }
 
-        res.json({ event: mapEventForFrontend(event) });
+        res.json({ event: { ...mapEventForFrontend(event), access: effectiveAccess } });
     } catch (error) {
         next(error);
     }
@@ -252,6 +261,42 @@ router.post('/', async (req, res, next) => {
             return res.status(400).json({
                 error: 'Bu sitede sadece Canlı Soru etkinliği oluşturulabilir.',
             });
+        }
+
+        // Pro-only: branding (logo) customization in theme settings.
+        // We enforce this on the server to prevent bypass via API calls.
+        const access = await getOrganizationAccess(tenantDb.direct as any, req.organizationId!);
+        const superAdminBypass = isSuperAdmin({ role: req.userRole, email: req.userEmail });
+        if (!superAdminBypass && access.isFreeOrTrial) {
+            const newSettings: any = (validatedData as any).settings || {};
+            const newTheme: any = newSettings.theme || {};
+
+            const normalizeLogoUrl = (theme: any, side: 'left' | 'right') => {
+                const objKey = side === 'left' ? 'logo' : 'rightLogo';
+                const urlKey = side === 'left' ? 'logoUrl' : 'rightLogoUrl';
+
+                const rawObj = theme?.[objKey];
+                const rawUrl = typeof theme?.[urlKey] === 'string' ? theme[urlKey] : null;
+
+                const url =
+                    rawObj && typeof rawObj === 'object' && typeof rawObj.url === 'string' && rawObj.url ? rawObj.url :
+                    typeof rawObj === 'string' && rawObj ? rawObj :
+                    rawUrl && rawUrl ? rawUrl :
+                    null;
+
+                return url || null;
+            };
+
+            const hasLeftLogo = Boolean(normalizeLogoUrl(newTheme, 'left'));
+            const hasRightLogo = Boolean(normalizeLogoUrl(newTheme, 'right'));
+
+            if (hasLeftLogo || hasRightLogo) {
+                return res.status(403).json({
+                    error: 'Logo ekleme ve logo ayarları Pro plan özelliğidir.',
+                    code: 'PRO_FEATURE',
+                    feature: 'branding_logos',
+                });
+            }
         }
 
         if (validatedData.eventPin) {
@@ -350,7 +395,85 @@ router.patch('/:id', async (req, res, next) => {
         if (validatedData.eventType !== undefined) updateData.event_type = validatedData.eventType;
         if (validatedData.maxParticipants !== undefined) updateData.max_participants = validatedData.maxParticipants;
         if (validatedData.status !== undefined) updateData.status = validatedData.status;
-        if (validatedData.settings !== undefined) updateData.settings = validatedData.settings;
+
+        if (validatedData.settings !== undefined) {
+            // Pro-only: branding (logo) customization in theme settings.
+            // We enforce this on the server to prevent bypass via API calls.
+            const access = await getOrganizationAccess(tenantDb.direct as any, req.organizationId!);
+            const superAdminBypass = isSuperAdmin({ role: req.userRole, email: req.userEmail });
+
+            if (!superAdminBypass && access.isFreeOrTrial) {
+                const existing = await tenantDb.findUnique<any>('event', req.organizationId!, {
+                    where: { id: req.params.id },
+                    select: { id: true, settings: true },
+                });
+
+                if (!existing) {
+                    return res.status(404).json({ error: 'Etkinlik bulunamadı' });
+                }
+
+                const oldSettings: any = existing.settings || {};
+                const newSettings: any = validatedData.settings || {};
+
+                const oldTheme: any = oldSettings.theme || {};
+                const newTheme: any = newSettings.theme || {};
+
+                const normalizeLogo = (theme: any, side: 'left' | 'right') => {
+                    const objKey = side === 'left' ? 'logo' : 'rightLogo';
+                    const urlKey = side === 'left' ? 'logoUrl' : 'rightLogoUrl';
+
+                    const rawObj = theme?.[objKey];
+                    const rawUrl = typeof theme?.[urlKey] === 'string' ? theme[urlKey] : null;
+
+                    const url =
+                        (rawObj && typeof rawObj === 'object' && typeof rawObj.url === 'string' && rawObj.url) ? rawObj.url :
+                        (typeof rawObj === 'string' && rawObj) ? rawObj :
+                        (rawUrl && rawUrl) ? rawUrl :
+                        null;
+
+                    if (!url) return null;
+
+                    const x = rawObj && typeof rawObj === 'object' && typeof rawObj.x === 'number' ? rawObj.x : 0;
+                    const y = rawObj && typeof rawObj === 'object' && typeof rawObj.y === 'number' ? rawObj.y : 0;
+                    const size = rawObj && typeof rawObj === 'object' && typeof rawObj.size === 'number' ? rawObj.size : 240;
+                    const anchor = side === 'right' && rawObj && typeof rawObj === 'object' && typeof rawObj.anchor === 'string' ? rawObj.anchor : undefined;
+
+                    return {
+                        url,
+                        x,
+                        y,
+                        size,
+                        ...(side === 'right' ? { anchor } : {}),
+                    };
+                };
+
+                const oldLeft = normalizeLogo(oldTheme, 'left');
+                const newLeft = normalizeLogo(newTheme, 'left');
+                const oldRight = normalizeLogo(oldTheme, 'right');
+                const newRight = normalizeLogo(newTheme, 'right');
+
+                const isDifferent = (a: any, b: any) => JSON.stringify(a) !== JSON.stringify(b);
+
+                const triesToAddOrChangeLeft =
+                    (!oldLeft && !!newLeft) ||
+                    (!!oldLeft && !!newLeft && isDifferent(oldLeft, newLeft));
+
+                const triesToAddOrChangeRight =
+                    (!oldRight && !!newRight) ||
+                    (!!oldRight && !!newRight && isDifferent(oldRight, newRight));
+
+                // Allow removal on Free/Trial (downgrade recovery), but do not allow adding/changing.
+                if (triesToAddOrChangeLeft || triesToAddOrChangeRight) {
+                    return res.status(403).json({
+                        error: 'Logo ekleme ve logo ayarları Pro plan özelliğidir.',
+                        code: 'PRO_FEATURE',
+                        feature: 'branding_logos',
+                    });
+                }
+            }
+
+            updateData.settings = validatedData.settings;
+        }
 
         const event = await tenantDb.update(
             'event',
@@ -476,6 +599,20 @@ router.post('/:id/tablet/token', async (req, res, next) => {
     try {
         if (!req.userId || !req.organizationId) {
             return res.status(401).json({ error: 'Yetkisiz erişim' });
+        }
+
+        const event = await tenantDb.findUnique<any>('event', req.organizationId!, {
+            where: { id: req.params.id },
+            select: { id: true, settings: true },
+        });
+
+        if (!event) {
+            return res.status(404).json({ error: 'Etkinlik bulunamadı' });
+        }
+
+        const role = String(req.userRole || 'organizer');
+        if (!canManageEventSteps(role, event.settings)) {
+            return res.status(403).json({ error: 'Tablet ekranı için yetkiniz yok' });
         }
 
         // Token is bound to the current authenticated user/org and expires quickly.

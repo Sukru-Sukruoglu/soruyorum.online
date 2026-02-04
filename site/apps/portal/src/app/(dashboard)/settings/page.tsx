@@ -4,6 +4,7 @@ import { Button } from "@ks-interaktif/ui";
 import { User, Bell, Lock, CreditCard, Globe } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { trpc } from "@/utils/trpc";
+import { isSuperAdminRole } from "@/utils/auth";
 
 export default function SettingsPage() {
     const meQuery = trpc.users.me.useQuery();
@@ -36,7 +37,7 @@ export default function SettingsPage() {
         setEmail(meQuery.data.email ?? "");
         setPhone(meQuery.data.phone ?? "");
         const role = meQuery.data.role;
-        setTitle(role === "superadmin" ? "Süper Admin" : role === "admin" ? "Admin" : role);
+        setTitle(isSuperAdminRole(role) ? "Süper Admin" : role === "admin" ? "Admin" : role);
         setDidInit(true);
     }, [meQuery.data, didInit]);
 

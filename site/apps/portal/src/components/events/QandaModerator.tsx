@@ -149,6 +149,7 @@ export function QandaModerator({
     const pendingQuestions = allQuestions.filter((q: any) => q.status === 'pending');
     const approvedQuestions = allQuestions.filter((q: any) => q.status === 'approved');
     const participantCount = participants?.length || 0;
+    const isInitialParticipantsLoading = participantsRaw == null && isFetchingParticipants;
 
     // Manual refresh
     const handleManualRefresh = async () => {
@@ -186,6 +187,13 @@ export function QandaModerator({
         const firstChar = Array.from(trimmed)[0] || 'A';
         const upper = firstChar.toLocaleUpperCase('tr-TR');
         return `${upper}***`;
+    };
+
+    const displayInitial = (name: string) => {
+        const label = displayName(name);
+        const trimmed = (label || '').trim();
+        const first = Array.from(trimmed)[0] || 'A';
+        return first.toLocaleUpperCase('tr-TR');
     };
 
     // Format time ago
@@ -466,8 +474,11 @@ export function QandaModerator({
                             <span className="bg-indigo-600 text-white px-3 py-1 rounded-full text-sm font-bold">
                                 {participantCount}
                             </span>
-                            {isFetchingParticipants && (
-                                <span className="text-xs font-bold text-gray-500">Yükleniyor…</span>
+                            {isInitialParticipantsLoading && (
+                                <span className="inline-flex items-center" aria-label="Yükleniyor">
+                                    <span className="sr-only">Yükleniyor…</span>
+                                    <span className="h-3 w-3 animate-spin rounded-full border-2 border-gray-300 border-t-gray-600" />
+                                </span>
                             )}
                         </div>
                     </div>
@@ -487,7 +498,7 @@ export function QandaModerator({
                                     className="group flex items-center gap-2 bg-gray-50 rounded-xl p-2.5 border border-gray-100 hover:border-indigo-200 transition-all"
                                 >
                                     <div className="w-9 h-9 rounded-full bg-gradient-to-br from-indigo-500 to-purple-500 flex items-center justify-center text-white text-sm font-bold shadow-lg">
-                                        {(p.name || 'A').charAt(0).toUpperCase()}
+                                        {displayInitial(p.name)}
                                     </div>
                                     <div className="flex-1 min-w-0">
                                         <p className="text-sm font-semibold text-gray-900 truncate">
@@ -507,7 +518,7 @@ export function QandaModerator({
                                             ev.preventDefault();
                                             ev.stopPropagation();
 
-                                            const ok = confirm(`“${p.name || 'Anonim'}” kullanıcısının oturumunu sonlandırmak istiyor musunuz?`);
+                                            const ok = confirm(`“${displayName(p.name)}” kullanıcısının oturumunu sonlandırmak istiyor musunuz?`);
                                             if (!ok) return;
 
                                             kickParticipantMutation.mutate({
@@ -583,7 +594,7 @@ export function QandaModerator({
                                         <div className="flex items-center justify-between mb-3">
                                             <div className="flex items-center gap-3">
                                                 <div className="w-10 h-10 rounded-full bg-gradient-to-br from-indigo-500 to-purple-500 flex items-center justify-center text-white font-bold shadow-lg">
-                                                    {(q.participantName || 'A').charAt(0).toUpperCase()}
+                                                            {displayInitial(q.participantName)}
                                                 </div>
                                                 <div>
                                                     <span className="font-bold text-gray-900">

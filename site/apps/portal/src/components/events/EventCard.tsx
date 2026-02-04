@@ -8,6 +8,7 @@ interface EventCardProps {
     title: string;
     date: string;
     participants: number;
+    pin?: string;
     status: "active" | "draft" | "completed";
     type: string;
     qandaCount?: number;
@@ -16,8 +17,10 @@ interface EventCardProps {
     onDelete?: () => void;
 }
 
-export function EventCard({ id, title, date, participants, status, type, qandaCount, lastQandaAt, onEditSettings, onDelete }: EventCardProps) {
+export function EventCard({ id, title, date, participants, pin, status, type, qandaCount, lastQandaAt, onEditSettings, onDelete }: EventCardProps) {
     const [showMenu, setShowMenu] = useState(false);
+
+    const displayPin = typeof pin === 'string' && pin.trim().length > 0 ? pin.trim() : null;
 
     const statusColors = {
         active: "bg-green-100 text-green-700 border-green-200",
@@ -47,6 +50,11 @@ export function EventCard({ id, title, date, participants, status, type, qandaCo
                     <div className="flex items-center gap-4 text-xs text-gray-500 mt-1">
                         <span className="flex items-center gap-1"><Calendar size={12} /> {date}</span>
                         <span className="flex items-center gap-1"><Users size={12} /> {participants}</span>
+                        {displayPin && (
+                            <span className="flex items-center gap-1 font-mono" title="Etkinlik PIN">
+                                PIN {displayPin}
+                            </span>
+                        )}
                     </div>
                 </div>
             </div>

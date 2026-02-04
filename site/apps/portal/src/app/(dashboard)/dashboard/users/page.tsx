@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Search, Shield, Trash2, Phone, CheckCircle, XCircle } from "lucide-react";
 import { trpc } from "../../../../utils/trpc";
-import { getRoleFromToken } from "../../../../utils/auth";
+import { getRoleFromToken, isSuperAdminRole } from "../../../../utils/auth";
 
 function formatDate(value: string | Date) {
     try {
@@ -29,7 +29,7 @@ export default function UsersPage() {
             const token = localStorage.getItem("auth_token") || localStorage.getItem("token");
             const r = getRoleFromToken(token);
             setRole(r);
-            if (r !== "superadmin") {
+            if (!isSuperAdminRole(r)) {
                 router.replace("/dashboard");
             }
         } catch {
@@ -40,7 +40,7 @@ export default function UsersPage() {
 
     const utils = trpc.useUtils();
     const { data, isLoading, error } = trpc.users.list.useQuery(undefined, {
-        enabled: role === "superadmin",
+        enabled: isSuperAdminRole(role),
         retry: false,
     });
 
@@ -136,9 +136,13 @@ export default function UsersPage() {
                                                 <Phone size={14} className="text-gray-400" />
                                                 <span>{u.phone}</span>
                                                 {u.phone_verified ? (
-                                                    <CheckCircle size={14} className="text-green-500" title="Doğrulanmış" />
+                                                    <span title="Doğrulanmış">
+                                                        <CheckCircle size={14} className="text-green-500" />
+                                                    </span>
                                                 ) : (
-                                                    <XCircle size={14} className="text-red-400" title="Doğrulanmamış" />
+                                                    <span title="Doğrulanmamış">
+                                                        <XCircle size={14} className="text-red-400" />
+                                                    </span>
                                                 )}
                                             </div>
                                         ) : (
@@ -147,7 +151,7 @@ export default function UsersPage() {
                                     </td>
                                     <td className="px-6 py-4 text-sm">
                                         <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold ${
-                                            u.role === "superadmin" 
+                                            isSuperAdminRole(u.role) 
                                                 ? "bg-purple-100 text-purple-700" 
                                                 : "bg-gray-100 text-gray-700"
                                         }`}>

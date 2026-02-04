@@ -7,6 +7,17 @@ export const errorHandler = (
     res: Response,
     next: NextFunction
 ) => {
+    const anyErr = error as any;
+
+    // body-parser / raw-body will throw when payload exceeds configured limit.
+    if (anyErr?.type === 'entity.too.large' || anyErr?.status === 413) {
+        return res.status(413).json({
+            error: 'İstek çok büyük',
+            message: 'Yüklenen dosya çok büyük. Lütfen daha küçük bir görsel deneyin.',
+            code: 'PAYLOAD_TOO_LARGE',
+        });
+    }
+
     console.error('[ERROR]', {
         message: error.message,
         stack: error.stack,

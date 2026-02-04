@@ -7,6 +7,8 @@ export type JwtPayload = {
     iat?: number;
 };
 
+const DEFAULT_SUPERADMIN_ROLES = ["superadmin", "super_admin", "root", "system", "owner"];
+
 function base64UrlDecode(input: string): string {
     const normalized = input.replace(/-/g, "+").replace(/_/g, "/");
     const padded = normalized + "===".slice((normalized.length + 3) % 4);
@@ -36,4 +38,15 @@ export function decodeJwtPayload(token: string | null | undefined): JwtPayload |
 
 export function getRoleFromToken(token: string | null | undefined): string | null {
     return decodeJwtPayload(token)?.role ?? null;
+}
+
+export function isSuperAdminRole(role: string | null | undefined): boolean {
+    if (!role) return false;
+    const normalized = String(role).trim().toLowerCase();
+    return DEFAULT_SUPERADMIN_ROLES.includes(normalized);
+}
+
+export function isSuperAdminToken(token: string | null | undefined): boolean {
+    const payload = decodeJwtPayload(token);
+    return isSuperAdminRole(payload?.role ?? null);
 }

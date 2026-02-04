@@ -1,5 +1,16 @@
-import React, { useState } from 'react';
+"use client";
+
+import React, { useEffect, useMemo, useState } from 'react';
+import { useRouter } from 'next/navigation';
 import '@/styles/event-settings-form.css';
+import { apiClient } from '@/services/api';
+import { getRoleFromToken, isSuperAdminRole } from '@/utils/auth';
+
+type OrganizationAccess = {
+    plan: string;
+    hasActiveSubscription: boolean;
+    isFreeOrTrial: boolean;
+};
 
 // Theme type for THEME_CATEGORIES
 interface ThemeOption {
@@ -65,6 +76,8 @@ export interface EventFormData {
             showHostInfo: boolean;
             canHostReset: boolean;
             stepManager?: 'admin' | 'moderator';
+            adminCanManage?: boolean;
+            moderatorCanManage?: boolean;
             startDateTime?: string;
         };
         // Difficulty settings (for quiz, matching)
@@ -88,9 +101,9 @@ export interface EventFormData {
         };
         // Theme settings
         theme?: {
-            primaryColor: string;
-            backgroundColor: string;
-            style: string; // Theme ID from THEME_CATEGORIES
+            primaryColor?: string;
+            backgroundColor?: string;
+            style?: string; // Theme ID from THEME_CATEGORIES
             logoUrl?: string;
             backgroundImage?: string;
             fontFamily?: string;
@@ -239,8 +252,55 @@ export default function EventSettingsForm({
     displayTitle,
     initialData,
 }: EventSettingsFormProps) {
+    const router = useRouter();
+
+    const [role, setRole] = useState<string | null>(null);
+
+    useEffect(() => {
+        try {
+            const token = localStorage.getItem('auth_token') || localStorage.getItem('token');
+            setRole(getRoleFromToken(token));
+        } catch {
+            setRole(null);
+        }
+    }, []);
+
     const [activeTab, setActiveTab] = useState<'flow' | 'info' | 'registration' | 'theme'>('info');
     const [selectedThemeCategory, setSelectedThemeCategory] = useState('solid');
+
+    const [access, setAccess] = useState<OrganizationAccess | null>(null);
+    const [accessLoaded, setAccessLoaded] = useState(false);
+
+    useEffect(() => {
+        let mounted = true;
+        const load = async () => {
+            try {
+                const r = await apiClient.get('/api/payments/access');
+                if (!mounted) return;
+                setAccess((r.data?.access ?? null) as OrganizationAccess | null);
+            } catch {
+                if (!mounted) return;
+                setAccess(null);
+            } finally {
+                if (!mounted) return;
+                setAccessLoaded(true);
+            }
+        };
+        void load();
+        return () => {
+            mounted = false;
+        };
+    }, []);
+
+    const canUseBrandingLogos = useMemo(() => {
+        if (isSuperAdminRole(role)) return true;
+        // Default to locked until we know access (defense-in-depth).
+        if (!accessLoaded) return false;
+        if (!access) return false;
+        const plan = String(access.plan || '').toLowerCase();
+        const isPremium = (!access.isFreeOrTrial || access.hasActiveSubscription) && plan !== 'free';
+        return Boolean(isPremium);
+    }, [access, accessLoaded, role]);
     
     // Tema Özelleştir Modal State
     const [showCustomThemeModal, setShowCustomThemeModal] = useState(false);
@@ -293,15 +353,27 @@ export default function EventSettingsForm({
             const existingLevels = initialData.settings?.matching?.levels;
 
             const existingGameplay = (initialData.settings as any)?.gameplay || {};
-            const stepManager: 'admin' | 'moderator' =
-                existingGameplay.stepManager === 'moderator'
-                    ? 'moderator'
-                    : existingGameplay.stepManager === 'admin'
-                        ? 'admin'
-                        : // Legacy fallback: if old toggle was enabled, treat as admin.
-                        existingGameplay.showHostInfo
-                            ? 'admin'
-                            : 'admin';
+            const stepManager: 'admin' | 'moderator' = (() => {
+                if (existingGameplay.stepManager === 'moderator') return 'moderator';
+                if (existingGameplay.stepManager === 'admin') return 'admin';
+
+                // Legacy fallback: prefer explicit manage flags if present.
+                if (existingGameplay.moderatorCanManage === true && existingGameplay.adminCanManage === false) {
+                    return 'moderator';
+                }
+
+                // Older fallback: if old toggle was enabled, treat as admin.
+                if (existingGameplay.showHostInfo) return 'admin';
+
+                return 'admin';
+            })();
+
+            const derivedManageFlags = (() => {
+                if (stepManager === 'moderator') {
+                    return { adminCanManage: false, moderatorCanManage: true };
+                }
+                return { adminCanManage: true, moderatorCanManage: false };
+            })();
 
             return {
                 ...initialData,
@@ -318,6 +390,10 @@ export default function EventSettingsForm({
                     gameplay: {
                         ...existingGameplay,
                         stepManager,
+                        // Keep backend permission flags in sync with step manager selection.
+                        adminCanManage: existingGameplay.adminCanManage ?? derivedManageFlags.adminCanManage,
+                        moderatorCanManage:
+                            existingGameplay.moderatorCanManage ?? derivedManageFlags.moderatorCanManage,
                     },
                     matching: {
                         levels: normalizeMatchingLevels(
@@ -339,10 +415,10 @@ export default function EventSettingsForm({
                 requireName: true,
                 requireEmail: false,
                 requirePhone: false,
-                requireAvatar: true,
+                requireAvatar: false,
                 requireId: false,
                 allowAnonymous: false,
-                requireKvkkConsent: false,
+                requireKvkkConsent: true,
             },
             gameplay: {
                 autoMarkNumbers: false,
@@ -350,6 +426,8 @@ export default function EventSettingsForm({
                 showHostInfo: false,
                 canHostReset: false,
                 stepManager: 'admin',
+                adminCanManage: false,
+                moderatorCanManage: true,
             },
             difficulty: {
                 level: 'medium',
@@ -423,6 +501,46 @@ export default function EventSettingsForm({
     };
 
     const updateGameplaySetting = (key: keyof typeof formData.settings.gameplay, value: any) => {
+        if (key === 'stepManager') {
+            const normalized = value === 'moderator' ? 'moderator' : 'admin';
+            setFormData({
+                ...formData,
+                settings: {
+                    ...formData.settings,
+                    gameplay: {
+                        ...formData.settings.gameplay,
+                        stepManager: normalized,
+                        // Keep backend permission flags in sync.
+                        adminCanManage: normalized === 'admin',
+                        moderatorCanManage: normalized === 'moderator',
+                    },
+                },
+            });
+            return;
+        }
+
+        if (key === 'adminCanManage' || key === 'moderatorCanManage') {
+            setFormData({
+                ...formData,
+                settings: {
+                    ...formData.settings,
+                    gameplay: (() => {
+                        const nextGameplay: any = {
+                            ...formData.settings.gameplay,
+                            [key]: Boolean(value),
+                        };
+
+                        // Backward compat: keep stepManager aligned when a single manager is chosen.
+                        const adminEnabled = nextGameplay.adminCanManage === true;
+                        const moderatorEnabled = nextGameplay.moderatorCanManage === true;
+                        nextGameplay.stepManager = moderatorEnabled && !adminEnabled ? 'moderator' : 'admin';
+                        return nextGameplay;
+                    })(),
+                },
+            });
+            return;
+        }
+
         setFormData({
             ...formData,
             settings: {
@@ -525,13 +643,6 @@ export default function EventSettingsForm({
                 >
                     Kayıt
                 </button>
-                <button
-                    className={`tab ${activeTab === 'theme' ? 'active' : ''}`}
-                    onClick={() => setActiveTab('theme')}
-                    type="button"
-                >
-                    Tema
-                </button>
             </div>
 
             <form onSubmit={handleSubmit}>
@@ -543,19 +654,27 @@ export default function EventSettingsForm({
                         <div className="toggle-group">
                             <div className="form-group" style={{ marginBottom: 16 }}>
                                 <label>Etkinlik adımlarını kim yönetsin?</label>
-                                <select
-                                    value={formData.settings.gameplay.stepManager || 'admin'}
-                                    onChange={(e) =>
-                                        updateGameplaySetting(
-                                            'stepManager' as any,
-                                            (e.target.value === 'moderator' ? 'moderator' : 'admin')
-                                        )
-                                    }
-                                >
-                                    <option value="admin">Etkinlik adımlarını Admin yönetsin</option>
-                                    <option value="moderator">Etkinlik adımlarını Moderator yönetsin</option>
-                                </select>
                                 <p className="field-hint">Adım/akış kontrolünün kimde olacağını belirler.</p>
+
+                                <div style={{ marginTop: 10 }}>
+                                    <ToggleItem
+                                        label="Etkinlik adımlarını Moderator yönetsin"
+                                        checked={formData.settings.gameplay.moderatorCanManage === true}
+                                        onChange={(checked) => {
+                                            // Prevent both toggles from being off.
+                                            if (!checked && formData.settings.gameplay.adminCanManage !== true) return;
+                                            updateGameplaySetting('moderatorCanManage' as any, checked);
+                                        }}
+                                    />
+                                    <ToggleItem
+                                        label="Etkinlik adımları Tablet'den de yönetilsin"
+                                        checked={formData.settings.gameplay.adminCanManage === true}
+                                        onChange={(checked) => {
+                                            if (!checked && formData.settings.gameplay.moderatorCanManage !== true) return;
+                                            updateGameplaySetting('adminCanManage' as any, checked);
+                                        }}
+                                    />
+                                </div>
                             </div>
 
                             <ToggleItem
@@ -898,7 +1017,8 @@ export default function EventSettingsForm({
                                         key={theme.id}
                                         type="button"
                                         onClick={() => {
-                                            const isImageBackground = hasBackground && (theme.background.startsWith('/') || theme.background.startsWith('http'));
+                                            const bg = theme.background ?? '';
+                                            const isImageBackground = hasBackground && (bg.startsWith('/') || bg.startsWith('http'));
                                             setFormData(prev => ({
                                                 ...prev,
                                                 settings: {
@@ -1032,8 +1152,8 @@ export default function EventSettingsForm({
                                                 <button
                                                     type="button"
                                                     onClick={() => {
-                                                        setCustomTheme(prev => ({ ...prev, logoUrl: '' }));
-                                                        setFormData(prev => ({
+                                                        setCustomTheme((prev) => ({ ...prev, logoUrl: '' }));
+                                                        setFormData((prev) => ({
                                                             ...prev,
                                                             settings: {
                                                                 ...prev.settings,
@@ -1045,16 +1165,19 @@ export default function EventSettingsForm({
                                                         }));
                                                     }}
                                                     className="absolute -top-2 -right-2 w-5 h-5 bg-red-500 text-white rounded-full text-xs flex items-center justify-center"
+                                                    title="Logoyu kaldır"
                                                 >
                                                     ✕
                                                 </button>
                                             </div>
-                                        ) : (
+                                        ) : null}
+
+                                        {canUseBrandingLogos ? (
                                             <label className="w-16 h-16 border-2 border-dashed border-gray-300 rounded-lg flex items-center justify-center cursor-pointer hover:border-indigo-500 transition-colors">
                                                 <span className="text-2xl text-gray-400">+</span>
-                                                <input 
-                                                    type="file" 
-                                                    accept="image/*" 
+                                                <input
+                                                    type="file"
+                                                    accept="image/*"
                                                     className="hidden"
                                                     onChange={(e) => {
                                                         const file = e.target.files?.[0];
@@ -1062,8 +1185,8 @@ export default function EventSettingsForm({
                                                             const reader = new FileReader();
                                                             reader.onload = (ev) => {
                                                                 const logoUrl = ev.target?.result as string;
-                                                                setCustomTheme(prev => ({ ...prev, logoUrl }));
-                                                                setFormData(prev => ({
+                                                                setCustomTheme((prev) => ({ ...prev, logoUrl }));
+                                                                setFormData((prev) => ({
                                                                     ...prev,
                                                                     settings: {
                                                                         ...prev.settings,
@@ -1079,6 +1202,27 @@ export default function EventSettingsForm({
                                                     }}
                                                 />
                                             </label>
+                                        ) : (
+                                            <div className="flex-1 rounded-xl border border-gray-200 bg-gray-50 p-3">
+                                                <div className="text-sm font-semibold text-gray-800">Logo ekleme Pro özelliği</div>
+                                                <div className="text-xs text-gray-600 mt-1">Free planda logo yükleyemezsiniz. (Mevcut logoyu kaldırabilirsiniz.)</div>
+                                                <div className="mt-2 flex flex-wrap gap-2">
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => router.push('/plans')}
+                                                        className="px-3 py-1.5 rounded-lg border border-gray-200 bg-white text-sm text-gray-700 hover:bg-gray-50"
+                                                    >
+                                                        Planları Gör
+                                                    </button>
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => router.push('/dashboard/billing')}
+                                                        className="px-3 py-1.5 rounded-lg bg-indigo-600 text-white text-sm hover:bg-indigo-700"
+                                                    >
+                                                        Pro’ya Geç
+                                                    </button>
+                                                </div>
+                                            </div>
                                         )}
                                     </div>
                                 </div>

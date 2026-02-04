@@ -11,6 +11,7 @@ import eventRoutes from './routes/events';
 import participantRoutes from './routes/participants';
 import settingsRoutes from './routes/settings';
 import reportsRoutes from './routes/reports';
+import paymentsRoutes from './routes/payments';
 import { orgRateLimiter } from './middleware/rateLimiter';
 import { errorHandler } from './middleware/errorHandler';
 
@@ -18,8 +19,10 @@ const app = express();
 const port = process.env.PORT || 4000;
 
 app.use(cors());
-app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
+// Allow larger payloads for event theme/logo settings (base64 data URLs).
+// Keep this bounded to reduce abuse risk.
+app.use(express.json({ limit: process.env.REQUEST_BODY_LIMIT ?? '15mb' }));
+app.use(express.urlencoded({ extended: true, limit: process.env.REQUEST_BODY_LIMIT ?? '15mb' }));
 
 app.use(
     "/trpc",
@@ -35,6 +38,7 @@ app.use('/api/events', orgRateLimiter, eventRoutes);
 app.use('/api/public', participantRoutes);
 app.use('/api/settings', settingsRoutes);
 app.use('/api/reports', orgRateLimiter, reportsRoutes);
+app.use('/api/payments', orgRateLimiter, paymentsRoutes);
 
 app.get("/health", (req, res) => {
     res.send("OK");

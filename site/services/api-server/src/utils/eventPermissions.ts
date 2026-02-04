@@ -12,9 +12,30 @@ export interface EventSettings {
     gameplay?: {
         adminCanManage?: boolean;
         moderatorCanManage?: boolean;
+        stepManager?: 'admin' | 'moderator';
         [key: string]: any;
     };
     [key: string]: any;
+}
+
+function deriveStepManageFlags(gameplay: NonNullable<EventSettings['gameplay']>): {
+    adminCanManage?: boolean;
+    moderatorCanManage?: boolean;
+} {
+    // If explicit flags exist, do not override them.
+    const hasAdmin = gameplay.adminCanManage !== undefined;
+    const hasMod = gameplay.moderatorCanManage !== undefined;
+    if (hasAdmin || hasMod) return {};
+
+    // Backward compat: if only stepManager is set, infer flags.
+    if (gameplay.stepManager === 'moderator') {
+        return { adminCanManage: false, moderatorCanManage: true };
+    }
+    if (gameplay.stepManager === 'admin') {
+        return { adminCanManage: true, moderatorCanManage: false };
+    }
+
+    return {};
 }
 
 export interface UserContext {
@@ -36,10 +57,13 @@ export function canManageEventSteps(
     eventSettings: EventSettings | null | undefined
 ): boolean {
     const gameplay = eventSettings?.gameplay || {};
+    const derived = deriveStepManageFlags(gameplay);
+    const effectiveAdminCanManage = (gameplay.adminCanManage ?? derived.adminCanManage) !== false;
+    const effectiveModeratorCanManage = (gameplay.moderatorCanManage ?? derived.moderatorCanManage) === true;
     
     // Eğer ayarlar hiç tanımlanmamışsa, herkes (admin, moderator, organizer) yönetebilir
-    const hasAdminSetting = gameplay.adminCanManage !== undefined;
-    const hasModeratorSetting = gameplay.moderatorCanManage !== undefined;
+    const hasAdminSetting = (gameplay.adminCanManage ?? derived.adminCanManage) !== undefined;
+    const hasModeratorSetting = (gameplay.moderatorCanManage ?? derived.moderatorCanManage) !== undefined;
     
     // Eğer hiçbir ayar yoksa, varsayılan olarak izin ver (eski davranış)
     if (!hasAdminSetting && !hasModeratorSetting) {
@@ -47,8 +71,8 @@ export function canManageEventSteps(
     }
     
     // Varsayılan değerler: admin her zaman yönetebilir, moderator varsayılan kapalı
-    const adminCanManage = gameplay.adminCanManage !== false; // undefined veya true ise true
-    const moderatorCanManage = gameplay.moderatorCanManage === true;
+    const adminCanManage = effectiveAdminCanManage; // undefined veya true ise true
+    const moderatorCanManage = effectiveModeratorCanManage;
     
     if (userRole === 'admin' && adminCanManage) {
         return true;
@@ -58,10 +82,9 @@ export function canManageEventSteps(
         return true;
     }
     
-    // Organizer (etkinlik sahibi) her zaman yönetebilir
-    if (userRole === 'organizer') {
-        return true;
-    }
+    // Organizer (etkinlik sahibi): explicit delegations varsa "admin" ile aynı kurala tabidir.
+    // Bu sayede tek bir taraf (admin/organizer veya moderator) yönetir.
+    if (userRole === 'organizer' && adminCanManage) return true;
     
     return false;
 }
@@ -96,19 +119,20 @@ export function getEventPermissions(
     isOrganizer: boolean;
 } {
     const gameplay = eventSettings?.gameplay || {};
+    const derived = deriveStepManageFlags(gameplay);
     
     const isAdmin = userRole === 'admin';
     const isModerator = userRole === 'moderator';
     const isOrganizer = userRole === 'organizer';
     
-    const adminCanManage = gameplay.adminCanManage !== false;
-    const moderatorCanManage = gameplay.moderatorCanManage === true;
+    const adminCanManage = (gameplay.adminCanManage ?? derived.adminCanManage) !== false;
+    const moderatorCanManage = (gameplay.moderatorCanManage ?? derived.moderatorCanManage) === true;
     const canHostReset = gameplay.canHostReset === true;
     
-    const canManageSteps = 
-        (isAdmin && adminCanManage) || 
-        (isModerator && moderatorCanManage) || 
-        isOrganizer;
+    const canManageSteps =
+        (isAdmin && adminCanManage) ||
+        (isModerator && moderatorCanManage) ||
+        (isOrganizer && adminCanManage);
     
     // Reset yetkisi: canHostReset açıksa ve yönetim yetkisi varsa
     const canResetEvent = canHostReset && canManageSteps;

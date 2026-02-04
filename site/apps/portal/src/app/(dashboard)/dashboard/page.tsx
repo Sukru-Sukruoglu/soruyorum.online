@@ -199,6 +199,7 @@ export default function DashboardPage() {
                                     title={event.name}
                                     date={safeToDateStringTr(event?.createdAt ?? event?.created_at)}
                                     participants={event._count?.participants || 0}
+                                    pin={String((event as any)?.eventPin ?? (event as any)?.event_pin ?? (event as any)?.pin ?? '').trim() || undefined}
                                     status={safeStatus(event?.status)}
                                     type={event.eventType === 'quiz' ? 'Canlı Soru' : event.eventType === 'poll' ? 'Anket' : event.eventType === 'tombala' ? 'Tombala' : 'Quiz'}
                                     onEditSettings={() => handleEdit(event)}

@@ -354,10 +354,10 @@ export default function CreateEventModal({
                                             requireName: rawEventType === 'wheel' ? (fetchedSettings?.requireName ?? true) : (existingSettings?.registration?.requireName ?? true),
                                             requireEmail: rawEventType === 'wheel' ? (fetchedSettings?.requireEmail ?? false) : (existingSettings?.registration?.requireEmail ?? false),
                                             requirePhone: rawEventType === 'wheel' ? (fetchedSettings?.requirePhone ?? false) : (existingSettings?.registration?.requirePhone ?? false),
-                                            requireAvatar: existingSettings?.registration?.requireAvatar ?? true,
+                                            requireAvatar: existingSettings?.registration?.requireAvatar ?? false,
                                             requireId: existingSettings?.registration?.requireId ?? false,
                                             allowAnonymous: existingSettings?.registration?.allowAnonymous ?? false,
-                                            requireKvkkConsent: existingSettings?.registration?.requireKvkkConsent ?? false,
+                                            requireKvkkConsent: existingSettings?.registration?.requireKvkkConsent ?? true,
                                         },
                                         wheel: {
                                             enableAccessCodes: fetchedSettings?.enableAccessCodes ?? false,
