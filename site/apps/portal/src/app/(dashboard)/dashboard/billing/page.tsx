@@ -29,6 +29,7 @@ type CartItem = {
     price: number; // TL cinsinden
     removable?: boolean;
     type: "package" | "addon";
+    addonId?: "addon_remote" | "addon_onsite";
 };
 
 /* ── Helpers ── */
@@ -107,6 +108,7 @@ export default function BillingPage() {
                 price: ADDON_REMOTE_PRICE,
                 removable: true,
                 type: "addon",
+                addonId: "addon_remote",
             });
         }
 
@@ -117,6 +119,7 @@ export default function BillingPage() {
                 price: ADDON_ONSITE_PRICE,
                 removable: true,
                 type: "addon",
+                addonId: "addon_onsite",
             });
         }
 
@@ -127,12 +130,7 @@ export default function BillingPage() {
     const total = subtotal;
     const selectedAddonIds = useMemo(() => {
         return items
-            .filter((item) => item.type === "addon")
-            .map((item) => {
-                if (item.name === "Remote Event Operator") return "addon_remote";
-                if (item.name === "On-site Event Operator") return "addon_onsite";
-                return null;
-            })
+            .map((item) => item.addonId)
             .filter((value): value is "addon_remote" | "addon_onsite" => Boolean(value));
     }, [items]);
 
