@@ -400,6 +400,22 @@ export const dashboardRouter = router({
             const allRecords = organizations.map((organization) => {
                 const owner = organization.users[0] ?? null;
                 const latestSubscription = organization.subscriptions[0] ?? null;
+                const failedPaymentsCount = organization.subscriptions.filter((subscription) => {
+                    const subscriptionMetadata = readJsonRecord(subscription.metadata) ?? {};
+                    const subscriptionGateway = readJsonRecord(subscriptionMetadata.gateway);
+                    const normalizedStatus = normalizeSubscriptionStatus(
+                        subscription.status,
+                        subscription.current_period_end,
+                        now
+                    );
+                    const normalizedGatewayStatus = (
+                        readString(subscriptionGateway?.status)
+                        ?? readString(subscriptionMetadata.paytr_status)
+                        ?? "none"
+                    ).toLowerCase();
+
+                    return normalizedStatus === "failed" || normalizedGatewayStatus === "failed";
+                }).length;
                 const metadata = readJsonRecord(latestSubscription?.metadata) ?? {};
                 const gateway = readJsonRecord(metadata.gateway);
                 const activation = readJsonRecord(metadata.activation);
@@ -445,12 +461,16 @@ export const dashboardRouter = router({
                 if (latestSubscription?.status === "failed") {
                     problemReasons.push("failed payment kaydı");
                 }
+                if (failedPaymentsCount > 1) {
+                    problemReasons.push("aynı organizasyonda tekrar eden failed payment kayıtları");
+                }
 
                 return {
                     organizationId: organization.id,
                     organizationName: organization.name,
                     organizationSlug: organization.slug,
                     rawOrganizationPlan: organization.plan,
+                    ownerEmail: owner?.email ?? null,
                     owner: owner
                         ? {
                               id: owner.id,
@@ -495,6 +515,10 @@ export const dashboardRouter = router({
                               updatedAt: toIso(latestSubscription.updated_at),
                           }
                         : null,
+                    subscriptionStatus,
+                    gatewayStatus,
+                    activationStatus,
+                    currentPeriodEnd: toIso(currentPeriodEnd),
                     addons: addons.map((addon) => ({
                         id: readString(addon.id),
                         name: readString(addon.name),
