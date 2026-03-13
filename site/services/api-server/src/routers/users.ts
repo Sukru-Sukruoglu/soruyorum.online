@@ -8,8 +8,51 @@ import crypto from "crypto";
 import { redis } from "../config/redis";
 import { normalizeTrPhone } from "../utils/phone";
 import { sendSms } from "../utils/sms";
+import { getOrganizationAccess } from "../utils/access";
 
 const BCRYPT_ROUNDS = parseInt(process.env.BCRYPT_ROUNDS || "10", 10);
+
+const billingProfileInputSchema = z.object({
+    legalName: z.string().trim().max(160).optional(),
+    taxOffice: z.string().trim().max(160).optional(),
+    taxNumber: z.string().trim().max(32).optional(),
+    billingEmail: z.string().trim().max(160).optional(),
+    billingPhone: z.string().trim().max(32).optional(),
+    addressLine: z.string().trim().max(500).optional(),
+    city: z.string().trim().max(120).optional(),
+    country: z.string().trim().max(120).optional(),
+});
+
+function normalizeBillingProfile(input: z.infer<typeof billingProfileInputSchema>) {
+    return {
+        legalName: input.legalName?.trim() || null,
+        taxOffice: input.taxOffice?.trim() || null,
+        taxNumber: input.taxNumber?.trim() || null,
+        billingEmail: input.billingEmail?.trim() || null,
+        billingPhone: input.billingPhone?.trim() || null,
+        addressLine: input.addressLine?.trim() || null,
+        city: input.city?.trim() || null,
+        country: input.country?.trim() || null,
+    };
+}
+
+function readSubscriptionMetadata(metadata: unknown) {
+    return metadata && typeof metadata === "object" && !Array.isArray(metadata)
+        ? (metadata as Record<string, unknown>)
+        : {};
+}
+
+function readAmountFromMetadata(metadata: Record<string, unknown>) {
+    const rawAmount = metadata.paytr_total_amount ?? metadata.amount;
+    if (typeof rawAmount === "number" && Number.isFinite(rawAmount)) {
+        return rawAmount;
+    }
+    if (typeof rawAmount === "string") {
+        const parsed = Number.parseInt(rawAmount, 10);
+        return Number.isFinite(parsed) ? parsed : null;
+    }
+    return null;
+}
 
 export const usersRouter = router({
     me: protectedProcedure.query(async ({ ctx }) => {
@@ -46,7 +89,131 @@ export const usersRouter = router({
             throw new TRPCError({ code: "UNAUTHORIZED", message: "User not found" });
         }
 
-        return user;
+        if (!user.organization_id) {
+            return {
+                ...user,
+                accessSummary: null,
+                subscription: null,
+                billingProfile: null,
+            };
+        }
+
+        const [organization, accessSummary, latestSubscription, subscriptionHistoryRaw] = await Promise.all([
+            ctx.prisma.organizations.findUnique({
+                where: { id: user.organization_id },
+                select: {
+                    id: true,
+                    name: true,
+                    slug: true,
+                    plan: true,
+                    settings: true,
+                },
+            }),
+            getOrganizationAccess(ctx.prisma as any, user.organization_id),
+            ctx.prisma.subscriptions.findFirst({
+                where: { organization_id: user.organization_id },
+                orderBy: { created_at: "desc" },
+                select: {
+                    id: true,
+                    plan: true,
+                    status: true,
+                    payment_method: true,
+                    current_period_start: true,
+                    current_period_end: true,
+                    created_at: true,
+                    metadata: true,
+                },
+            }),
+            ctx.prisma.subscriptions.findMany({
+                where: { organization_id: user.organization_id },
+                orderBy: { created_at: "desc" },
+                take: 12,
+                select: {
+                    id: true,
+                    plan: true,
+                    status: true,
+                    payment_method: true,
+                    current_period_start: true,
+                    current_period_end: true,
+                    created_at: true,
+                    metadata: true,
+                },
+            }),
+        ]);
+
+        const orgSettings = organization?.settings;
+        const billingProfile =
+            orgSettings && typeof orgSettings === "object" && !Array.isArray(orgSettings)
+                ? (orgSettings as Record<string, unknown>).billingProfile ?? null
+                : null;
+
+        const subscriptionHistory = subscriptionHistoryRaw.map((item) => {
+            const metadata = readSubscriptionMetadata(item.metadata);
+            const gateway = metadata.gateway && typeof metadata.gateway === "object" && !Array.isArray(metadata.gateway)
+                ? metadata.gateway
+                : null;
+            const activation = metadata.activation && typeof metadata.activation === "object" && !Array.isArray(metadata.activation)
+                ? metadata.activation
+                : null;
+
+            return {
+                id: item.id,
+                plan: item.plan,
+                status: item.status,
+                payment_method: item.payment_method,
+                current_period_start: item.current_period_start,
+                current_period_end: item.current_period_end,
+                created_at: item.created_at,
+                amount: readAmountFromMetadata(metadata),
+                currency: typeof metadata.currency === "string" ? metadata.currency : "TRY",
+                package_id: typeof metadata.packageId === "string" ? metadata.packageId : null,
+                package_name: typeof metadata.packageName === "string" ? metadata.packageName : null,
+                paytr_status: typeof metadata.paytr_status === "string" ? metadata.paytr_status : null,
+                merchant_oid: typeof metadata.merchant_oid === "string" ? metadata.merchant_oid : null,
+                addons: Array.isArray(metadata.addons) ? metadata.addons : [],
+                entitlements: Array.isArray(metadata.entitlements) ? metadata.entitlements : [],
+                activation,
+                gateway,
+            };
+        });
+
+        const latestSubscriptionMetadata = readSubscriptionMetadata(latestSubscription?.metadata);
+        const latestGateway = latestSubscriptionMetadata.gateway && typeof latestSubscriptionMetadata.gateway === "object" && !Array.isArray(latestSubscriptionMetadata.gateway)
+            ? latestSubscriptionMetadata.gateway
+            : null;
+        const latestActivation = latestSubscriptionMetadata.activation && typeof latestSubscriptionMetadata.activation === "object" && !Array.isArray(latestSubscriptionMetadata.activation)
+            ? latestSubscriptionMetadata.activation
+            : null;
+        const normalizedLatestSubscription = latestSubscription
+            ? {
+                  ...latestSubscription,
+                  amount: readAmountFromMetadata(latestSubscriptionMetadata),
+                  currency: typeof latestSubscriptionMetadata.currency === "string" ? latestSubscriptionMetadata.currency : "TRY",
+                  package_id: typeof latestSubscriptionMetadata.packageId === "string" ? latestSubscriptionMetadata.packageId : null,
+                  package_name: typeof latestSubscriptionMetadata.packageName === "string" ? latestSubscriptionMetadata.packageName : null,
+                  addons: Array.isArray(latestSubscriptionMetadata.addons) ? latestSubscriptionMetadata.addons : [],
+                  entitlements: Array.isArray(latestSubscriptionMetadata.entitlements) ? latestSubscriptionMetadata.entitlements : [],
+                  paytr_status: typeof latestSubscriptionMetadata.paytr_status === "string" ? latestSubscriptionMetadata.paytr_status : null,
+                                    activation: latestActivation,
+                                    gateway: latestGateway,
+              }
+            : null;
+
+        return {
+            ...user,
+            organizations: organization
+                ? {
+                    id: organization.id,
+                    name: organization.name,
+                    slug: organization.slug,
+                    plan: organization.plan,
+                }
+                : user.organizations,
+            accessSummary,
+            subscription: normalizedLatestSubscription,
+            billingProfile,
+            subscriptionHistory,
+        };
     }),
 
     sendPhoneOtp: protectedProcedure
@@ -349,6 +516,40 @@ export const usersRouter = router({
             return { ok: true };
         }),
 
+    updateBillingProfile: protectedProcedure
+        .input(billingProfileInputSchema)
+        .mutation(async ({ ctx, input }) => {
+            if (!ctx.user.organizationId) {
+                throw new TRPCError({ code: "BAD_REQUEST", message: "Organizasyon bulunamadı" });
+            }
+
+            const organization = await ctx.prisma.organizations.findUnique({
+                where: { id: ctx.user.organizationId },
+                select: { settings: true },
+            });
+
+            const currentSettings =
+                organization?.settings && typeof organization.settings === "object" && !Array.isArray(organization.settings)
+                    ? { ...(organization.settings as Record<string, unknown>) }
+                    : {};
+
+            const billingProfile = normalizeBillingProfile(input);
+
+            await ctx.prisma.organizations.update({
+                where: { id: ctx.user.organizationId },
+                data: {
+                    settings: {
+                        ...currentSettings,
+                        billingProfile,
+                        billingProfileUpdatedAt: new Date().toISOString(),
+                    },
+                    updated_at: new Date(),
+                },
+            });
+
+            return { ok: true };
+        }),
+
     list: protectedProcedure.query(async ({ ctx }) => {
         if (!isSuperAdmin(ctx.user)) {
             throw new TRPCError({
@@ -362,6 +563,7 @@ export const usersRouter = router({
             select: {
                 id: true,
                 email: true,
+                email_verified: true,
                 name: true,
                 role: true,
                 phone: true,
