@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
-import { LayoutDashboard, BarChart2, FileText, Settings, Briefcase, Crown, LogOut, Users } from "lucide-react";
+import { LayoutDashboard, BarChart2, FileText, Settings, Briefcase, LogOut, Users, Crown, CreditCard } from "lucide-react";
 import { getRoleFromToken, isSuperAdminRole } from "../../utils/auth";
 import { PremiumUpgradePanel } from "../billing/PremiumUpgradePanel";
 
@@ -42,6 +42,13 @@ export function Sidebar() {
                 icon: Users,
                 href: "/dashboard/users",
                 activeColor: "from-purple-600 to-indigo-700",
+                exact: false,
+            },
+            {
+                label: "Billing Ops",
+                icon: CreditCard,
+                href: "/dashboard/billing-ops",
+                activeColor: "from-amber-600 to-orange-700",
                 exact: false,
             },
             ...NAV_ITEMS.slice(4),
