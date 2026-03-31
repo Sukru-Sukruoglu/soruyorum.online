@@ -177,7 +177,7 @@ export default async function LandingPage() {
                                             <span className="section-title__tagline">Hakkımızda</span>
                                             <div className="section-title__tagline-shape-2"></div>
                                         </div>
-                                        <h2 className="section-title__title title-animation">2006'dan Bu Yana <span>Sizlere Hizmet</span><br /><span>Veriyoruz</span></h2>
+                                        <h2 className="section-title__title title-animation">12006'dan Bu Yana <span>Sizlere Hizmet</span><br /><span>Veriyoruz</span></h2>
                                     </div>
                                     <p className="about-two__text">2006 yılından bu yana sizlere hizmet vermeye devam etmekteyiz. Toplantı ve etkinliklerinizde katılımcılardan anında geri bildirimler elde etmek ve interaktif toplantı ortamı yaratabilmek için kablosuz oylama, yazılım ve aktivite sistemlerimiz ile çözüm alternatifleri sunmaktayız. Siz etkinliğinizi planlarken bizimle yapacağınız iş birliğinde, ekibimize teslim ettiğiniz projenize titizlikle sahip çıkılmasının rahatlığını yaşarsınız. Toplantı ve etkinliklerinizin verimliliğinin artması, aktif katılımın sağlanması ile gerçekleşir ve biz de hizmetini vermiş olduğumuz çözümlerimiz ile yardımcı olmak için buradayız. Ürün ve hizmetlerimiz sizlerin ihtiyacına cevap verecek şekilde güncellenmektedir.</p>
                                     <div className="about-two__points-box">
