@@ -614,7 +614,7 @@ export default async function LandingPage() {
                         <li><h2 data-hover="Branding" className="contact-two__sliding-text-title">İLETİŞİM İÇİN *</h2></li>
                     </ul>
                     <div className="contact-two__bg" style={{ backgroundImage: 'url(https://imagedelivery.net/prdw3ANMyocSBJD-Do1EeQ/f9ae6050-5a59-4bd6-c80a-d48b5e7c5d00/soruyorum)' }}></div>
-                  
+                     
                     <div className="contact-two__shape-2"></div>
                     <div className="container">
                         <div className="row">
