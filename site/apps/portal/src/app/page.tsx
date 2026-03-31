@@ -615,7 +615,7 @@ export default async function LandingPage() {
                     </ul>
                     <div className="contact-two__bg" style={{ backgroundImage: 'url(https://imagedelivery.net/prdw3ANMyocSBJD-Do1EeQ/f9ae6050-5a59-4bd6-c80a-d48b5e7c5d00/soruyorum)' }}></div>
                     <div className="contact-two__shape-1 float-bob-y">
-                        <img src="/assets/images/shapes/contact-two-shape-1.png" alt="" />
+                       
                     </div>
                     <div className="contact-two__shape-2"></div>
                     <div className="container">
