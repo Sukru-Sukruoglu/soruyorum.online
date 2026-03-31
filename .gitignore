@@ -27,3 +27,18 @@ Thumbs.db
 
 # Cache
 .cache/
+
+# Backups
+site/backups/
+*.bak.*
+
+# Sensitive
+site/services/api-server/src/utils/secrets.ts
+site/services/tmp/
+
+# Docs/pdf
+site/docs/*.pdf
+
+# Misc
+site/domain_xray_*/
+"ubscription access resolution\""

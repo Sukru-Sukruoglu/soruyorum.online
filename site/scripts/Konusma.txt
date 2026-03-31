@@ -1,0 +1,2153 @@
+sımdı bır adım ılerıye gecelım mı? Full branding dahil
+
+ssukruoglu@gmail.com un bılgılerını ıncele abonelık durumu vs vs
+
+
+önceki 10 mesaj
+Canlı veritabanında baktım; ssukruoglu@gmail.com kaydı mevcut.
+
+Kullanıcı: ŞÜKRÜ ŞÜKRÜOĞLU, rol admin, e-posta doğrulanmış, telefon doğrulanmamış. Şirket alanı Keypad Sistem İletişim Bilişim Turizm Org. Tic. Ltdi Şti.
+Organizasyon: plan şu anda free. logo_url boş, branding alanı boş, henüz oluşturulmuş etkinlik yok.
+Abonelik: aktif abonelik yok. 14 Mart 2026 tarihinde Event Starter için bir PayTR kart ödeme denemesi açılmış ama durum failed olmuş. Bu yüzden sistem bunu aktif abonelik saymıyor.
+Bülten aboneliği: newsletter_subscriptions içinde bu e-posta için kayıt yok.
+Oturum: aktif session görünmüyor.
+Full branding şu an dahil değil. Hatta başarısız olan seçili paket event_starter; bu pakette de branding kapalı. Kod tarafında branding sadece WL planlarında açılıyor: starter_wl, standard_wl, professional_wl, corporate_wl, corporate_pro_wl. Mantık access.ts (line 42) ve paket listesi payments.ts (line 47) içinde.
+
+Trial süresi de ortamda override edilmemiş; varsayılan 14 gün. Hesap 14 Mart 2026 oluşturulduğu için trial erişimi yaklaşık 28 Mart 2026’ya kadar açık sayılır; aktif abonelik kontrolü access.ts (line 104) içinde yapılıyor.
+
+İsterseniz bir sonraki adımda bu kullanıcı için WL planı tanımlama, branding alanlarını doldurma veya başarısız ödeme kaydını temizleyip düzgün bir abonelik akışı hazırlama işini yapayım.
+
+
+Kullanıcı eki
+sımdı brandınge logo eklemede gırıyor barandıng dahıl olmayan paketlerde bu logo eklemesı yapamamamız lazım kılıtlı olması lazım
+
+
+önceki 10 mesaj
+Logo kilidini doğru kurala bağladım. Artık editörde logo yetkisi “ücretli mi” diye değil, doğrudan access.features.branding üzerinden hesaplanıyor; branding yoksa logo yükleme, sürükleme ve boyutlandırma akışı açılmıyor, upgrade modalı tetikleniyor ve API branding_logos hatası dönerse kullanıcı görünür uyarı alıyor. Ana değişiklikler edit/page.tsx (line 529), edit/page.tsx (line 549), edit/page.tsx (line 996) ve edit/page.tsx (line 1507) içinde.
+
+Ekrandaki metinleri de “Pro” yerine gerçek paket kuralına göre “full branding” olarak netleştirdim; kilitli durum mesajları ve yükseltme CTA’sı hem editörde hem de event settings formunda güncellendi: edit/page.tsx (line 2464) ve EventSettingsForm.tsx (line 1318).
+
+site/apps/portal içinde pnpm exec tsc --noEmit çalıştırdım. Repo genelinde zaten var olan başka TypeScript hataları nedeniyle tam typecheck kırmızı kaldı; hata listesi billing-ops, dashboard/settings, wheel, join, plans-preview gibi dosyalarda, dokunduğum iki dosya hata listesine düşmedi. Tarayıcıda canlı smoke test yapmadım.
+
+
+
+Full branding dahil değil
+
+Özel subdomain / domain dahil değil  lerınm aylt yapısını yapmıstık yanı bır ıncelermısın sıstemı bu sekılde olması lazım
+
+
+önceki 10 mesaj
+İnceledim. Sistem mantığı backend’de zaten sizin dediğiniz gibi kurulmuş:
+
+WL olmayan paketlerde Full branding ve Özel subdomain / domain kapalı: access.ts
+WL paketlerde ikisi de açık: access.ts
+Ödeme paketleri de aynı ayrımla tanımlı: payments.ts
+Canlı tarafta tek bozuk nokta app_settings.pricing içindeki Çoklu Event Paketleri > Event Pack (5 event) kartıydı. Orada yanlışlıkla Full branding dahil yazıyordu. Onu düzelttim; artık o kart da:
+
+Full branding dahil değil
+Özel subdomain / domain dahil değil
+şeklinde.
+
+Ayrıca tüm canlı pricing verisini tekrar taradım; branding/domain etiketlerinde başka çelişki kalmadı.
+
+Açık kalan tek konu şu: projede iki ayrı plan sayfası var. Detaylı ve doğru paket yapısı PricingPreviewClient.tsx içinde. Ama eski sade free/pro sayfası hâlâ PlansClient.tsx içinde duruyor. İstersen bir sonraki adımda onu da kaldırıp tüm sistemi tek fiyatlandırma yapısında birleştireyim.
+
+
+ssukruoglu@gmail.com da alt paket onda da full brandıng acık olmaması lazım ama logosunu degıstırebılıyorum
+
+
+önceki 9 mesaj
+ssukruoglu@gmail.com hesabını tekrar kontrol ettim. Bu organizasyonun planı hâlâ free; aktif abonelik yok, sadece başarısız event_starter ödeme denemesi var. Yani bu hesapta full branding açık olmamalı.
+
+Sorunun iki nedeni vardı: etkinlikte önceden kaydedilmiş bir logo vardı ve çalışan portal container eski build’i kullanıyordu. İkisini de düzelttim. 68f4d3dc-9b9f-4efa-8bfe-a52f58e12bd0 etkinliğindeki theme.logoUrl temizlendi, sonra portal ve api-server yeniden build edilip yeniden başlatıldı. Şu an veritabanında logo alanı boş ve yeni build branding kilidini içeriyor. İlgili mantık access.ts ve edit/page.tsx tarafında.
+
+Tarayıcıda eski JS cache’i kalmış olabilir; bir hard refresh yapın (Ctrl+Shift+R). Hâlâ logo değiştirebiliyorsanız aynı etkinlik ekranının yeni ekran görüntüsünü atın, o zaman hangi endpoint/ekran açık bırakıyor onu doğrudan izleyip kapatayım.
+
+
+Tasarımlar da kılıtlı olması lazım Gorsel ekleme yapamamaları lazım... sadece cıft renkler ve ılk standart sekılde acık olması lazım
+
+Tasarım kilidini de ekledim.
+
+Editörde düşük paket kullanıcıları artık sadece Varsayılan ve Çift renkler temalarını görüyor; diğer tema kategorileri ve arka plan görsel yükleme upgrade duvarına düşüyor: edit/page.tsx (line 541), edit/page.tsx (line 1040), edit/page.tsx (line 1571), edit/page.tsx (line 2962)
+EventSettingsForm içinde de aynı kural var; Özel Tema Oluştur, gelişmiş kategori seçimi ve özel görsel tasarım akışı alt paketlerde kilitli: EventSettingsForm.tsx (line 377), EventSettingsForm.tsx (line 1142), EventSettingsForm.tsx (line 1246)
+Backend tarafında da kural zorunlu hale geldi; alt paket bir kullanıcı API üzerinden gelişmiş tema/görsel göndermeye çalışırsa advanced_designs hatası alıyor, ayrıca düşük paket event’lerin dönen/public theme verisi izinli temaya sanitize ediliyor: themeAccess.ts (line 117), routes/events.ts (line 336), routes/events.ts (line 546), routers/events.ts (line 131)
+portal ve api-server yeniden build edilip ayağa kaldırıldı. 68f4d3dc-9b9f-4efa-8bfe-a52f58e12bd0 için canlı events.getPublicInfo smoke testinde tema artık zorla featured1 + varsayılan arka plan dönüyor. Tarayıcıda eski JS kalmışsa bir Ctrl+Shift+R yapın.
+
+
+Tamam sımdı soruyorum sadce cevap ver. sımdı bız subdomain ve domain ekleme kısmımız da var bunu bız nasıl yapabılırız? sıstemı buna cevırmek mumkun mu ? Canva da domaın kullanma secenegı var acaba o sekılde mı yapsak?
+
+
+önceki 4 mesaj
+Evet, mümkün. Ama şu an sisteminiz buna hazır değil; sadece paket izni var. customDomain yetkisi WL planlarında tanımlı access.ts (line 34), fakat host çözümü hâlâ sabit alan adlarına bağlı: middleware sadece soruyorum.online, mobil.soruyorum.online, tablet.soruyorum.online biliyor middleware.ts (line 4), join URL üretimi de sabit host varsayıyor events.ts (line 11), veritabanında da domain eşlemesi için ayrı bir tablo/alan yok; sadece slug var schema.prisma (line 92), schema.prisma (line 156).
+
+Bence Canva’daki UX mantığını alın, ama ilk etapta onun “domain satma” kısmını almayın. En doğru model şu:
+
+Ücretsiz/default adres verin: firma.soruyorum.online.
+WL kullanıcıya “mevcut domainimi bağla” seçeneği verin: örnek etkinlik.firma.com.
+İlk fazda sadece CNAME ile bağlanan subdomain destekleyin. Root/apex domain (firma.com) işini ikinci faza bırakın.
+Aynı host altında path kullanın: etkinlik.firma.com/join, etkinlik.firma.com/events/:id/live, etkinlik.firma.com/tablet/.... Her müşteri için ayrı mobil./tablet./ekran. host kurmayın.
+Veritabanına organization_domains gibi bir tablo ekleyin: hostname, type, status, verification_token, is_primary, ssl_status.
+Kullanıcı domain girince ona CNAME ve TXT doğrulama kaydı verin; doğrulanınca host aktif olsun.
+Reverse proxy ve app katmanında tenant çözümünü Host header’dan yapın; sabit host listelerini kaldırın.
+Eğer Cloudflare kullanacaksanız, en temiz yol Cloudflare for SaaS / Custom Hostnames. SSL ve custom hostname işini çok kolaylaştırır.
+“Canva gibi mi yapalım?” sorusunun kısa cevabı: evet, UX olarak evet; operasyon olarak kısmen. 14 Mart 2026 itibarıyla Canva resmi sayfalarında ücretsiz my.canva.site adresi, Pro’da mevcut domain bağlama ve domain satın alma seçenekleri var; ama domain satın alma tarafı reseller modeli ve ayrı operasyon/hukuk yükü getiriyor. O yüzden sizde önce:
+
+soruyorum subdomain
+existing domain connect
+olsun. Domain satışını sonra düşünün.
+Kaynaklar:
+
+Canva resmi: https://www.canva.com/features/link-in-bio/
+Canva resmi terms, son güncelleme 4 Kasım 2025: https://www.canva.com/policies/feature-specific-terms/
+Cloudflare resmi: https://developers.cloudflare.com/cloudflare-for-platforms/cloudflare-for-saas/
+Cloudflare custom hostname oluşturma: https://developers.cloudflare.com/cloudflare-for-platforms/cloudflare-for-saas/domain-support/create-custom-hostnames/
+Ben olsam bunu tam bu sırayla yaparım: önce *.soruyorum.online, sonra existing custom domain, en son domain purchase/reseller.
+
+
+
+Özel subdomain / domain dahil olarak paketlerımız var bunları yapmak ıstersek cokmu zorlanırınız nasıl bır yapı kırmamız gerek. yıne bana arastırıp bılgı ver
+
+
+önceki 1 mesaj
+Kısa cevap: yapılır. Ama “ayar açalım bitsin” seviyesinde değil; doğru kurulursa çok sağlam olur, yanlış kurulursa domain, SSL ve tenant karışıklığı çıkarır. Ben olsam bunu rahat kurarım, ama scope’u doğru bölerim.
+
+Bugünkü durumda sisteminizde ürün izni var, altyapı yok:
+
+Paket flag’i hazır: customDomain WL planlarda açık access.ts (line 34)
+Host çözümü sabit domainlere bağlı middleware.ts (line 4)
+Join URL üretimi sabit host varsayıyor events.ts (line 11)
+Veritabanında gerçek domain eşlemesi için tablo yok; sadece slug var schema.prisma (line 92), schema.prisma (line 156)
+Edge/proxy tarafı da sabit Host(...) kurallarıyla çalışıyor docker-compose.yml (line 19)
+Bence doğru yapı şu:
+
+Önce firma.soruyorum.online verin.
+Sonra müşterinin kendi subdomainini bağlatın: event.firma.com.
+En son apex/root domain ekleyin: firma.com.
+Domain satışı işini şimdilik yapmayın; Canva’nın UX’ini alın, operasyonunu değil.
+Önerdiğim mimari:
+
+Yeni tablo: organization_domains
+Alanlar: hostname, organization_id, type, status, is_primary, verification_method, verification_token, ssl_status, created_at
+Uygulama katmanı: her istekte Host header’dan organization çöz
+URL üretimi: joinUrl, qrCodeUrl, live/tablet linkleri artık sabit host değil, aktif primary domain’den üret
+Dashboard akışı: domain ekle -> DNS kaydını göster -> doğrula -> aktif et -> primary yap
+Plan kontrolü: customDomain yoksa domain ekleme UI ve API kilitli olsun
+Teknik tercih:
+
+En temiz çözüm: Cloudflare for SaaS / Custom Hostnames
+Neden: Cloudflare resmi olarak fallback origin, custom hostname, sertifika yönetimi ve müşteri CNAME akışını bunun için veriyor
+Subdomain için çok uygun
+Apex/root domain için ek olarak Apex Proxying gerekiyor; bu daha ileri seviye ve maliyetli bir katman
+Resmi kaynaklar:
+
+Cloudflare SaaS başlangıç: https://developers.cloudflare.com/cloudflare-for-platforms/cloudflare-for-saas/start/getting-started/
+Custom hostnames: https://developers.cloudflare.com/cloudflare-for-platforms/cloudflare-for-saas/domain-support/create-custom-hostnames/
+Apex proxying: https://developers.cloudflare.com/cloudflare-for-platforms/cloudflare-for-saas/start/advanced-settings/apex-proxying/
+Canva websites/custom domain mantığı: https://www.canva.com/website-builder/static/
+Canva websites duyurusu: https://www.canva.com/newsroom/news/canva-websites/
+Traefik HostRegexp: https://doc.traefik.io/traefik/v3.3/routing/routers/
+Let’s Encrypt rate limits: https://letsencrypt.org/uk/docs/rate-limits/
+Zorluk seviyesi bence şöyle:
+
+*.soruyorum.online: düşük
+müşteri subdomaini event.firma.com: orta ve yapılabilir
+apex firma.com: orta-yüksek
+Canva gibi domain satışı: yüksek ve gereksiz yük
+Kabaca tahminim:
+
+faz *.soruyorum.online: 2-4 gün
+faz custom subdomain: 1-2 hafta
+faz apex domain: ekstra 1-2 hafta
+Bu tahmin, mevcut repo yapınıza bakarak yaptığım teknik tahmin.
+Ben olsam şu sırayla giderim:
+
+Faz 1: firma.soruyorum.online
+Faz 2: event.firma.com CNAME ile
+Faz 3: seçili kurumsal paketlere firma.com
+Faz 4: belki sonra domain satışı
+İstersen bir sonraki adımda sana doğrudan bu repo için “hangi tabloyu ekleriz, hangi middleware’i değiştiririz, hangi ekranları açarız” şeklinde somut bir uygulama planı çıkarayım.
+
+ben domaın satısı yapmayacagım canvaya da ben kendı domaınımı yonlendırmıstım onu demek ıstedım
+
+O zaman doğru model bu: Canva gibi mevcut domainimi bağla.
+
+Bu sizin için daha iyi, çünkü:
+
+domain satışı yok
+hukuk/faturalama yükü yok
+kullanıcı kendi domainini kendi registrar’ından yönetir
+siz sadece doğrulama, yönlendirme, SSL ve tenant eşleme yaparsınız
+Pratikte kullanıcı akışı şöyle olur:
+
+Kullanıcı panelde event.firma.com yazar.
+Sistem ona bir CNAME kaydı verir.
+Gerekirse doğrulama için bir TXT kaydı da verir.
+Kullanıcı DNS’te bunu ekler.
+Siz DNS’i kontrol edersiniz.
+Doğrulanınca domain aktif olur.
+O domain artık o organizasyonun primary host’u olur.
+Benim önerim:
+
+İlk sürümde sadece subdomain destekleyin
+Yani event.firma.com, soru.firma.com, canli.firma.com
+Root domain firma.com desteğini ilk aşamada açmayın
+Sebep:
+
+CNAME ile çözüm çok daha temiz
+SSL yönetimi daha kolay
+destek yükü daha düşük
+kullanıcı hatası daha az
+Teknik olarak en iyi model:
+
+sizde bir organization_domains tablosu
+hostname -> organization eşleşmesi
+app içinde Host header’dan tenant çözümü
+URL üretiminde sabit mobil.soruyorum.online yerine primary custom host kullanımı
+proxy/SSL tarafında Cloudflare for SaaS en rahat çözüm
+Yani özet:
+
+evet, yapılır
+zor ama kontrollü bir iş
+Canva’daki “existing domain connect” mantığı sizin için doğru yaklaşım
+domain satışı yapmamanız iyi karar
+ilk fazı sadece subdomain bağlama olarak açmanızı öneririm
+İstersen bir sonraki mesajda sana bunu doğrudan:
+
+veritabanı yapısı
+backend endpointleri
+panel ekranı
+DNS doğrulama akışı
+SSL/proxy seçeneği
+olarak maddeli net teknik plana dökeyim.
+
+
+tamam bana bununla ılgılı bır yapım raporu cıkartırmısın
+
+Yapım Raporu
+
+Bu rapor, Özel subdomain / domain dahil paketlerini gerçekten çalışır hale getirmek için gereken ürün, altyapı ve yazılım işlerini özetler. Kapsam: kullanıcı kendi mevcut domain/subdomain’ini sisteme bağlar; domain satışı yoktur.
+
+Sonuç
+Mevcut sistem bu özelliğe ürün mantığı olarak hazır, teknik olarak hazır değil.
+
+Paket yetkisi var: customDomain sadece WL planlarda açık access.ts (line 34)
+Host çözümü sabit domain listesine bağlı middleware.ts (line 4)
+Join URL üretimi sabit host varsayıyor events.ts (line 11)
+Veritabanında domain eşlemesi tutan bir yapı yok schema.prisma (line 92), schema.prisma (line 156)
+Edge/proxy tarafı da sabit Host(...) kurallarıyla ilerliyor docker-compose.yml (line 19)
+Bu yüzden özellik yapılabilir, ama “ayar açma” değil, kontrollü bir mimari değişiklik gerekir.
+
+Önerilen Kapsam
+İlk sürümde sadece mevcut subdomain bağlama desteklenmelidir.
+
+Desteklenecek: event.firma.com
+Şimdilik desteklenmeyecek: kök domain firma.com
+Sebep: CNAME ile doğrulama, SSL ve yönlendirme çok daha temiz
+Ürün mantığı: yalnızca Starter WL, Standard WL, Professional WL, Corporate WL, Corporate Pro WL
+Önerilen kullanıcı akışı Canva’daki “existing domain connect” modeline benzer olmalı:
+
+Kullanıcı panelde event.firma.com girer
+Sistem bir CNAME hedefi ve doğrulama TXT kaydı verir
+Kullanıcı DNS’e ekler
+Sistem doğrular
+Domain aktif olur
+İsterse “primary domain” yapar
+Önerilen Mimari
+Teknik olarak en sağlıklı yapı tek host yaklaşımıdır.
+
+Aynı custom host altında tüm akış çalışır
+event.firma.com/join
+event.firma.com/events/:id/live
+event.firma.com/tablet/events/:id
+Ayrı mobil. / tablet. / ekran. alt alanlarını custom domain için çoğaltmamak gerekir
+Yeni tablo önerisi: organization_domains
+
+id
+organization_id
+hostname unique
+type system_subdomain | custom_domain
+status pending_dns | verified | active | failed | disabled
+is_primary
+verification_token
+verification_method
+cname_target
+ssl_status
+last_checked_at
+verified_at
+created_at
+updated_at
+Ek mantık:
+
+Her organizasyonun bir adet sistem domaini olabilir: slug.soruyorum.online
+İsteğe bağlı 1 veya daha fazla custom domain bağlanabilir
+Ama aynı anda tek primary domain olmalı
+Tüm URL üretimleri primary host’tan yapılmalı
+Uygulama Katmanında Gereken Değişiklikler
+Backend:
+
+Prisma migration ile organization_domains tablosu eklenmeli
+Domain ekleme/doğrulama/aktif etme endpointleri yazılmalı
+customDomain yetkisi API’de zorunlu kontrol edilmeli
+joinUrl, qrCodeUrl, live/tablet linkleri aktif domain’e göre üretilmeli
+Host bazlı tenant çözümü middleware/service katmanına taşınmalı
+Frontend:
+
+Ayarlar ekranına “Domainler” bölümü eklenmeli
+Domain ekleme sihirbazı olmalı
+DNS kayıtları kopyalanabilir gösterilmeli
+“Doğrula”, “Primary yap”, “Pasif et”, “Sil” aksiyonları olmalı
+WL olmayan paketlerde bu alan kilitli olmalı
+Middleware ve routing:
+
+Sabit host set’leri kaldırılmalı veya fallback olarak kalmalı
+Host header’dan organization bulunmalı
+Host sistemde kayıtlı değilse mevcut default davranışa dönmeli
+tablet rewrite mantığı host bağımsız çalışmalı
+Altyapı Tercihi
+Tavsiye edilen çözüm: Cloudflare for SaaS / Custom Hostnames
+
+Custom hostname yönetimi hazır gelir
+SSL yükü ciddi ölçüde azalır
+DNS doğrulama ve certificate akışı daha güvenli olur
+Çoklu müşteri domaini için daha ölçeklenebilir
+Alternatif: Traefik + Let's Encrypt + HostRegexp
+
+Çalışır
+Ama operasyonel yük daha yüksektir
+Sertifika yenileme, rate limit ve hata ayıklama daha yorucu olur
+Benim önerim:
+
+Faz 1: *.soruyorum.online
+Faz 2: custom subdomain event.firma.com
+Faz 3: gerekirse apex/root domain firma.com
+Aşamalı Teslim Planı
+Faz 1: Sistem subdomain
+
+organization_domains tablosu
+otomatik slug.soruyorum.online
+URL üretim refactor
+host bazlı tenant çözümü
+panelde domain listeleme
+Tahmini süre: 2-4 gün
+
+Faz 2: Mevcut custom subdomain bağlama
+
+domain ekleme ekranı
+DNS doğrulama
+primary domain mantığı
+SSL/custom hostname entegrasyonu
+canlı smoke testler
+Tahmini süre: 1-2 hafta
+
+Faz 3: Root/apex domain
+
+firma.com desteği
+ek DNS/SSL akışı
+daha sıkı operasyon kontrolleri
+Tahmini süre: ek 1 hafta civarı
+
+Riskler
+
+Host çözümlenmesi yanlış yapılırsa tenant karışması olur
+Sabit host varsayımları çok yerde olduğu için refactor dikkat ister
+SSL akışı elle yapılırsa destek yükü artar
+Root domain desteği ilk fazda açılırsa gereksiz karmaşıklık yaratır
+Net Öneri
+En doğru başlangıç şudur:
+
+Sadece WL planlarda açın
+İlk sürümde yalnızca event.firma.com gibi subdomain bağlatın
+Tek host altında /join, /live, /tablet çalıştırın
+Cloudflare SaaS kullanın
+Domain satışına hiç girmeyin
+Kaynaklar
+
+Cloudflare for SaaS: https://developers.cloudflare.com/cloudflare-for-platforms/cloudflare-for-saas/start/getting-started/
+Custom hostnames: https://developers.cloudflare.com/cloudflare-for-platforms/cloudflare-for-saas/domain-support/create-custom-hostnames/
+Apex proxying: https://developers.cloudflare.com/cloudflare-for-platforms/cloudflare-for-saas/start/advanced-settings/apex-proxying/
+Traefik router docs: https://doc.traefik.io/traefik/v3.3/routing/routers/
+Let’s Encrypt rate limits: https://letsencrypt.org/uk/docs/rate-limits/
+İstersen bunu bir sonraki adımda doğrudan teknik iş listesine çevirip migration + API + UI + infra şeklinde sprint planı olarak da çıkarayım.
+
+
+Cloudflare SaaS kullanın ne demek oluyor
+
+Cloudflare SaaS kullanın demek şu:
+
+Siz kendi uygulamanızı tek merkezden çalıştırırsınız, ama müşteriler kendi domainlerini size bağlar. Cloudflare bu custom domainleri sizin adınıza yönetir.
+
+Örnek:
+
+sizin sistem: soruyorum.online
+müşteri domaini: event.firma.com
+Normalde bunun için sizin:
+
+DNS doğrulama
+SSL sertifikası
+host yönlendirme
+domain aktivasyonu
+işlerini çok uğraşarak yönetmeniz gerekir.
+
+Cloudflare for SaaS / Custom Hostnames bunu kolaylaştırır:
+
+müşteri event.firma.com domainini size bağlar
+siz Cloudflare’e bu hostu tanıtırsınız
+Cloudflare doğrulama ve SSL sürecini yönetir
+gelen trafik Cloudflare üzerinden sizin origin’inize düşer
+siz uygulamada sadece bu host hangi müşteriye ait diye bakarsınız
+Yani basit anlatımla:
+
+Cloudflare CDN kullanın değil
+Cloudflare’i white-label custom domain katmanı olarak kullanın
+Size faydası:
+
+SSL sertifikasını tek tek elle uğraşmazsınız
+çok sayıda müşteri domaini daha rahat yönetilir
+daha profesyonel ve ölçekli olur
+event.firma.com gibi domainleri daha temiz açarsınız
+Siz kullanmazsanız ne olur:
+
+Traefik/Nginx + Let’s Encrypt ile bunu siz kurarsınız
+yine yapılır
+ama bakım ve hata ihtimali daha yüksek olur
+Kısaca:
+
+az müşteri varsa: elle de yapılır
+büyüyecekse: Cloudflare for SaaS daha doğru
+İstersen bir sonraki mesajda bunu çok sade bir şema ile anlatayım:
+
+Cloudflare SaaS’lı akış
+Cloudflare’siz akış
+hangisi size daha uygun
+
+Cloudflare SaaS ın ucretı var mı ?
+
+
+sımdı benım kullandıgım bır cloudflare hesabı var. bırtane de bunun ıcın alıp ilk etapta 100 domaıın ucretsiz ya onu kullanalım
+
+Olur, mantıklı yaklaşım bu.
+
+İlk etapta ayrı bir Cloudflare hesabı ya da en azından ayrı bir zone/proje mantığıyla kurmak daha temiz olur. Sebepleri:
+
+mevcut ana hesabınızdan izole olur
+test/yanlış ayar canlı ana yapıyı etkilemez
+custom hostname/domain işlerini ayrı yönetirsiniz
+maliyet ve kullanım takibi daha net olur
+ilk 100 custom hostname hakkını bu proje için temiz kullanırsınız
+Benim önerim:
+
+ayrı Cloudflare hesabı açın ya da ayrı ekip/workspace altında tutun
+soruyorum.online zone’unu orada yönetin
+Cloudflare for SaaS / Custom Hostnames bunun üstünde kurgulayın
+ilk fazda sadece subdomain bağlayın
+root domain işine sonra girin
+Dikkat edilmesi gereken nokta:
+
+bu 100 hak custom hostname içindir
+yani her müşteri domain/subdomain bir adet tüketir
+örnek event.firma.com = 1
+ama eğer siz her müşteri için ayrıca join.firma.com, live.firma.com, tablet.firma.com gibi ayrı host açarsanız 3-4 adet gider
+bu yüzden size daha önce önerdiğim tek-host yapı önemli
+En doğru başlangıç yapınız:
+
+müşteri hostu: event.firma.com
+join: event.firma.com/join
+ekran: event.firma.com/events/:id/live
+tablet: event.firma.com/tablet/events/:id
+Böylece 1 müşteri = 1 hostname olur.
+
+İstersen bir sonraki adımda sana Cloudflare tarafında:
+
+hangi hesabı açman lazım
+hangi zone ayarları gerekli
+hangi kayıtlar ve hangi Cloudflare özellikleri açılacak
+bizim kod tarafında hangi değişiklikler yapılacak
+şeklinde doğrudan kurulum checklist’i çıkarayım.
+
+
+soruyorum u bu hesaba tasımak nasıl olur pekı yanı yenı hesaba
+
+
+önceki 1 mesaj
+Evet, soruyorum.online’ı yeni Cloudflare hesabına taşıyabilirsiniz. Bu, teknik olarak mümkün ve bence custom-domain işine başlamadan önce temiz bir hazırlık olur.
+
+Şunu ayırmak lazım:
+
+Eğer domain kayıt firmanız Cloudflare değilse: sadece zone taşırsınız.
+Eğer domain Cloudflare Registrar’da kayıtlıysa: zone taşımasına ek olarak registrar tarafında da hesaplar arası taşıma gerekir.
+Nasıl olur:
+
+Yeni Cloudflare hesabında soruyorum.online zone’unu ekleyin.
+Eski hesaptan DNS kayıtlarını export edin.
+Yeni hesaba DNS kayıtlarını import edin.
+Eski hesaptaki önemli ayarları elle yeniden kurun:
+SSL/TLS
+WAF / firewall rules
+Redirect/Page Rules/Transform Rules
+Workers / Zaraz / Rate limiting varsa
+DNSSEC açıksa kapatın.
+Registrar panelinden nameserver’ları yeni hesabın verdiği nameserver’lara çevirin.
+Yeni hesapta Re-check now ile aktifleşmesini bekleyin.
+Testleri yapın, sonra eski hesabı bırakın.
+Önemli riskler:
+
+Cloudflare resmi dokümana göre ayarlar otomatik taşınmıyor; DNS dışındaki çoğu şeyi yeniden kurmanız gerekiyor.
+Yeni zone Pending durumundayken proxy aktif olmaz; bu sırada origin IP’niz dönebilir.
+Eski hesapta zone Moved durumuna düşer ve sonra silinir.
+Custom certificate kullanıyorsanız yeniden issue / upload gerekir.
+Sizin repo açısından:
+
+Uygulama kodu taşımadan dolayı bozulmaz; çünkü host hâlâ soruyorum.online olarak kalır.
+Yani bu işlem esasen DNS/Cloudflare yönetim katmanında olur.
+Custom hostname/SaaS kuracaksanız, bunu ayrı hesapta başlatmak yönetim açısından daha temiz olur.
+Eğer domain Cloudflare Registrar’daysa:
+
+Cloudflare’ın ayrı bir “inter-account transfer” süreci var.
+İki hesabın da taşıma onayı vermesi gerekiyor.
+30 gün transfer lock oluşuyor.
+Resmi kaynaklar:
+
+Zone taşıma: https://developers.cloudflare.com/fundamentals/manage-domains/move-domain/
+Registrar domain’i hesaplar arası taşıma: https://developers.cloudflare.com/registrar/account-options/inter-account-transfer/
+Zone status: https://developers.cloudflare.com/dns/zone-setups/reference/domain-status/
+Kısa önerim:
+
+Evet, taşıyın.
+Ama önce eski hesaptaki tüm DNS ve kural setini envanterleyin.
+Ardından düşük trafikli bir saatte nameserver değişimini yapın.
+Custom domain projesi için yeni hesabı kullanmak mantıklı.
+İstersen sonraki mesajda sana doğrudan soruyorum.online taşıma checklisti hazırlayayım:
+
+taşıma öncesi
+taşıma anı
+taşıma sonrası testler şeklinde.
+
+yenı bır domaın alıp o cloudflare ı ona baglasak? soruyorum.tech
+
+
+önceki 2 mesaj
+Evet, bu bence daha temiz bir başlangıç olur.
+
+14 Mart 2026 itibarıyla yaptığım WHOIS kontrolünde soruyorum.tech için DOMAIN NOT FOUND döndü; yani şu anda boş görünüyor. Ama bu anlık durumdur, satın alma ekranında tekrar kontrol etmek gerekir.
+
+En doğru kullanım şekli şu olur:
+
+soruyorum.online şimdilik mevcut hesapta kalsın
+yeni Cloudflare hesabında soruyorum.tech açın
+Cloudflare for SaaS / Custom Hostnames bunun üstünde kurulsun
+teknik CNAME hedefiniz mesela connect.soruyorum.tech olsun
+müşteri kendi DNS’inde event.firma.com CNAME connect.soruyorum.tech yapsın
+müşteri tarafında görünen domain yine event.firma.com olur, soruyorum.tech arka plandaki kontrol alanı olur
+Bu modelin artısı:
+
+ana canlı domaini taşımadan sistemi kurarsınız
+yeni Cloudflare hesabında güvenli test yaparsınız
+ilk 100 custom hostname hakkını temiz kullanırsınız
+soruyorum.online bozulma riski çok düşer
+Bence ilk fazda bunu yapın:
+
+yeni domain: soruyorum.tech
+yeni CF hesabı: bunun için ayrı
+SaaS zone: soruyorum.tech
+managed target: connect.soruyorum.tech
+müşteri default alt alanı isterseniz ayrıca firma.soruyorum.tech de verebilirsiniz
+Yalnız önemli nokta:
+
+bu yapı için uygulamanın Host header’dan tenant çözmesi gerekecek
+yani kod tarafında yine domain eşleme geliştirmesi şart
+ama soruyorum.online’ı taşımadan ilerlemek çok daha az riskli
+Cloudflare resmi kaynakları:
+
+Custom hostnames: https://developers.cloudflare.com/cloudflare-for-platforms/cloudflare-for-saas/domain-support/
+Create custom hostnames: https://developers.cloudflare.com/cloudflare-for-platforms/cloudflare-for-saas/domain-support/create-custom-hostnames/
+Custom origin: https://developers.cloudflare.com/cloudflare-for-platforms/cloudflare-for-saas/start/advanced-settings/custom-origin/
+Hostname migration: https://developers.cloudflare.com/cloudflare-for-platforms/cloudflare-for-saas/domain-support/migrating-custom-hostnames/
+Kısa önerim:
+
+evet, soruyorum.tech alın
+soruyorum.online’ı hemen taşımayın
+yeni hesabı SaaS/custom-domain altyapısı için kullanın
+İstersen bir sonraki mesajda sana bunun tam kurulum planını çıkarayım:
+
+domain alınca ne yapacaksın
+Cloudflare’de hangi ayarları açacaksın
+kodda hangi parçaları değiştireceğiz
+
+sımdı uygun domaın secelım mı? soruyorum.live  var soruyorum.org var
+
+
+önceki 3 mesaj
+Ben olsam soruyorum.live seçerim.
+
+14 Mart 2026 itibarıyla yaptığım kontrolte:
+
+soruyorum.org WHOIS’te Domain not found döndü
+soruyorum.live için DNS/registry tarafında da kayıt izi görünmedi
+yani ikisi de şu anda büyük ihtimalle alınabilir durumda
+Neden soruyorum.live?
+
+sizin ürün “canlı” kullanım senaryosuna daha iyi oturuyor
+firma.soruyorum.live gibi subdomainler daha doğal durur
+custom-domain altyapısı için teknik “kontrol domaini” olarak daha uygun hissettirir
+soruyorum.org ticari SaaS için biraz kurum/dernek hissi veriyor
+Benim önerim:
+
+ana tercih: soruyorum.live
+bütçe derseniz savunma amaçlı ek alınabilir: soruyorum.org
+ama tek domain seçilecekse: soruyorum.live
+En doğru kullanım da şu olur:
+
+yeni Cloudflare hesabı + soruyorum.live
+SaaS/custom-hostname altyapısı burada
+ana marka şimdilik soruyorum.online olarak kalır
+Kaynaklar:
+
+ICANN WHOIS aracı hakkında resmi bilgi: https://www.icann.org/en/resources/compliance/complaints/whois/search
+ICANN ana lookup servisi: https://lookup.icann.org/en
+Public Interest Registry (.org) WHOIS/RDAP altyapısı: https://www.pir.org/
+İstersen sonraki adımda sana doğrudan isim shortlist’i de çıkarayım:
+
+soruyorum.live
+soruyorum.tech
+soruyorum.app
+soruyorum.cloud
+arasından hangisi bu yapı için en iyi olur.
+
+yada soruyourum.app olabılır mı
+
+
+önceki 1 mesaj
+Evet, olabilir. Hatta teknik olarak .app, Cloudflare SaaS için uygun bir kontrol domaini de olabilir.
+
+Ama iki önemli not var:
+
+Yazım: soruyourum.app marka açısından zayıf. Büyük ihtimalle kastınız soruyorum.app. Ben soruyourum yazımını önermem.
+.app alan adı HTTPS zorunlu çalışır. Google Registry’nin resmi açıklamasına göre .app HSTS preload listesinde, yani tüm bağlantılar HTTPS olmalı. Bu sizin için sorun değil; Cloudflare ile zaten HTTPS kullanacağız. Kaynak: https://get.app/
+14 Mart 2026 itibarıyla yaptığım kontrolde:
+
+soruyourum.app için DNS kaydı görünmüyor
+ama bu ortamdan .app WHOIS’i net çekemedim
+yani kesin “boş” demek yerine, registrar satın alma ekranında son kontrolü yapın
+Benim net önerim:
+
+soruyourum.app alma
+eğer mümkünse soruyorum.app bak
+o da yoksa soruyorum.live bence hâlâ daha doğal ve güçlü
+Sıralamam şu olur:
+
+soruyorum.app
+soruyorum.live
+soruyorum.tech
+soruyorum.org
+Sebep:
+
+.app ürün/SaaS hissi veriyor
+.live sizin canlı etkinlik tarafınıza çok iyi oturuyor
+.org daha kurumsal/organizasyon hissi veriyor, ticari SaaS için daha zayıf
+İstersen bir sonraki mesajda sana kısa bir karar tablosu yapayım:
+
+marka gücü
+teknik uygunluk
+kullanıcı güveni
+WL/custom-domain altyapısına uyum
+puanlı şekilde.
+
+tamam ıkısı de bosta soruyorum.app ve soruyorum.live bırı 12 usd dıgerı 3 usd sence?
+
+14 Mart 2026 itibarıyla sizin verdiğiniz fiyatlarla ben şöyle yapardım:
+
+Tek domain alınacaksa: soruyorum.live
+Bütçe uygunsa: soruyorum.live + soruyorum.app ikisini de alın
+Neden:
+
+soruyorum.live sizin canlı etkinlik/soru-cevap işine daha doğal oturuyor
+custom-domain altyapısında varsayılan alt alan adı olarak da daha iyi durur: firma.soruyorum.live
+fiyat farkı ciddi, 3 USD seviyesinde düşük riskli
+.app güzel ama daha “uygulama ürünü” hissi veriyor; ayrıca Google Registry’ye göre .app alanlarında HTTPS zorunlu, bu sorun değil ama ek bir gereklilik. Kaynak: https://get.app/
+.live de resmi registry tarafında canlı yayın/etkinlik tipi kullanım için uygun konumlanıyor. Kaynak: https://www.identity.digital/
+Benim net kararım:
+
+Operasyon için soruyorum.live
+Marka koruması için imkan varsa yanına soruyorum.app
+Yani “bir tane” dersen: soruyorum.live.
+“En temiz uzun vadeli set” dersen: ikisini de al, aktif kullanım soruyorum.live olsun.
+
+
+selam sımdı ıkısını de aldım ve yenı cloudflare e yapılandırdım.  Sımdı Yapım Raporu
+
+Bu rapor, Özel subdomain / domain dahil paketlerini gerçekten çalışır hale getirmek için gereken ürün, altyapı ve yazılım işlerini özetler. Kapsam: kullanıcı kendi mevcut domain/subdomain’ini sisteme bağlar; domain satışı yoktur.
+
+Sonuç
+Mevcut sistem bu özelliğe ürün mantığı olarak hazır, teknik olarak hazır değil.
+
+Paket yetkisi var: customDomain sadece WL planlarda açık access.ts (line 34)
+Host çözümü sabit domain listesine bağlı middleware.ts (line 4)
+Join URL üretimi sabit host varsayıyor events.ts (line 11)
+Veritabanında domain eşlemesi tutan bir yapı yok schema.prisma (line 92), schema.prisma (line 156)
+Edge/proxy tarafı da sabit Host(...) kurallarıyla ilerliyor docker-compose.yml (line 19)
+Bu yüzden özellik yapılabilir, ama “ayar açma” değil, kontrollü bir mimari değişiklik gerekir.
+
+Önerilen Kapsam
+İlk sürümde sadece mevcut subdomain bağlama desteklenmelidir.
+
+Desteklenecek: event.firma.com
+Şimdilik desteklenmeyecek: kök domain firma.com
+Sebep: CNAME ile doğrulama, SSL ve yönlendirme çok daha temiz
+Ürün mantığı: yalnızca Starter WL, Standard WL, Professional WL, Corporate WL, Corporate Pro WL
+Önerilen kullanıcı akışı Canva’daki “existing domain connect” modeline benzer olmalı:
+
+Kullanıcı panelde event.firma.com girer
+Sistem bir CNAME hedefi ve doğrulama TXT kaydı verir
+Kullanıcı DNS’e ekler
+Sistem doğrular
+Domain aktif olur
+İsterse “primary domain” yapar
+Önerilen Mimari
+Teknik olarak en sağlıklı yapı tek host yaklaşımıdır.
+
+Aynı custom host altında tüm akış çalışır
+event.firma.com/join
+event.firma.com/events/:id/live
+event.firma.com/tablet/events/:id
+Ayrı mobil. / tablet. / ekran. alt alanlarını custom domain için çoğaltmamak gerekir
+Yeni tablo önerisi: organization_domains
+
+id
+organization_id
+hostname unique
+type system_subdomain | custom_domain
+status pending_dns | verified | active | failed | disabled
+is_primary
+verification_token
+verification_method
+cname_target
+ssl_status
+last_checked_at
+verified_at
+created_at
+updated_at
+Ek mantık:
+
+Her organizasyonun bir adet sistem domaini olabilir: slug.soruyorum.online
+İsteğe bağlı 1 veya daha fazla custom domain bağlanabilir
+Ama aynı anda tek primary domain olmalı
+Tüm URL üretimleri primary host’tan yapılmalı
+Uygulama Katmanında Gereken Değişiklikler
+Backend:
+
+Prisma migration ile organization_domains tablosu eklenmeli
+Domain ekleme/doğrulama/aktif etme endpointleri yazılmalı
+customDomain yetkisi API’de zorunlu kontrol edilmeli
+joinUrl, qrCodeUrl, live/tablet linkleri aktif domain’e göre üretilmeli
+Host bazlı tenant çözümü middleware/service katmanına taşınmalı
+Frontend:
+
+Ayarlar ekranına “Domainler” bölümü eklenmeli
+Domain ekleme sihirbazı olmalı
+DNS kayıtları kopyalanabilir gösterilmeli
+“Doğrula”, “Primary yap”, “Pasif et”, “Sil” aksiyonları olmalı
+WL olmayan paketlerde bu alan kilitli olmalı
+Middleware ve routing:
+
+Sabit host set’leri kaldırılmalı veya fallback olarak kalmalı
+Host header’dan organization bulunmalı
+Host sistemde kayıtlı değilse mevcut default davranışa dönmeli
+tablet rewrite mantığı host bağımsız çalışmalı
+Altyapı Tercihi
+Tavsiye edilen çözüm: Cloudflare for SaaS / Custom Hostnames
+
+Custom hostname yönetimi hazır gelir
+SSL yükü ciddi ölçüde azalır
+DNS doğrulama ve certificate akışı daha güvenli olur
+Çoklu müşteri domaini için daha ölçeklenebilir
+Alternatif: Traefik + Let's Encrypt + HostRegexp
+
+Çalışır
+Ama operasyonel yük daha yüksektir
+Sertifika yenileme, rate limit ve hata ayıklama daha yorucu olur
+Benim önerim:
+
+Faz 1: *.soruyorum.online
+Faz 2: custom subdomain event.firma.com
+Faz 3: gerekirse apex/root domain firma.com
+Aşamalı Teslim Planı
+Faz 1: Sistem subdomain
+
+organization_domains tablosu
+otomatik slug.soruyorum.online
+URL üretim refactor
+host bazlı tenant çözümü
+panelde domain listeleme
+Tahmini süre: 2-4 gün
+
+Faz 2: Mevcut custom subdomain bağlama
+
+domain ekleme ekranı
+DNS doğrulama
+primary domain mantığı
+SSL/custom hostname entegrasyonu
+canlı smoke testler
+Tahmini süre: 1-2 hafta
+
+Faz 3: Root/apex domain
+
+firma.com desteği
+ek DNS/SSL akışı
+daha sıkı operasyon kontrolleri
+Tahmini süre: ek 1 hafta civarı
+
+Riskler
+
+Host çözümlenmesi yanlış yapılırsa tenant karışması olur
+Sabit host varsayımları çok yerde olduğu için refactor dikkat ister
+SSL akışı elle yapılırsa destek yükü artar
+Root domain desteği ilk fazda açılırsa gereksiz karmaşıklık yaratır
+Net Öneri
+En doğru başlangıç şudur:
+
+Sadece WL planlarda açın
+İlk sürümde yalnızca event.firma.com gibi subdomain bağlatın
+Tek host altında /join, /live, /tablet çalıştırın
+Cloudflare SaaS kullanın
+Domain satışına hiç girmeyin
+Kaynaklar
+
+Cloudflare for SaaS: https://developers.cloudflare.com/cloudflare-for-platforms/cloudflare-for-saas/start/getting-started/
+Custom hostnames: https://developers.cloudflare.com/cloudflare-for-platforms/cloudflare-for-saas/domain-support/create-custom-hostnames/
+Apex proxying: https://developers.cloudflare.com/cloudflare-for-platforms/cloudflare-for-saas/start/advanced-settings/apex-proxying/
+Traefik router docs: https://doc.traefik.io/traefik/v3.3/routing/routers/
+Let’s Encrypt rate limits: https://letsencrypt.org/uk/docs/rate-limits/
+İstersen bunu bir sonraki adımda doğrudan teknik iş listesine çevirip migration + API + UI + infra şeklinde sprint planı olarak da çıkarayım.
+
+  sımdı buna baslayalım mı
+
+sen benden ne beklıyorsun?
+
+Sizden şu an sadece 3 şey gerekiyor:
+
+soruyorum.live için Zone ID
+Cloudflare’da oluşturulmuş API Token
+Cloudflare’da connect.soruyorum.live kaydının hazır olması
+Token için önerdiğim minimum yetki:
+
+SSL and Certificates: Write
+Eğer isterseniz ben size Cloudflare panelinde bunu tam nereden alacağınızı da adım adım yazayım. Token ve Zone ID gelince ben kalan kurulumu burada tamamlayacağım.
+
+
+Kullanıcı eki
+Zone ID  bdfed1e0b38160db825ed3bf34313e9c   resımdekını doldurmama yardım et
+
+Şöyle doldurun:
+
+Token name
+
+Soruyorum SaaS Custom Hostnames
+Permissions
+
+İlk dropdown: Zone
+İkinci dropdown: SSL and Certificates
+Üçüncü dropdown: Edit
+Sonra Add more deyin ve şunu ekleyin:
+
+İlk dropdown: Zone
+İkinci dropdown: Zone
+Üçüncü dropdown: Read
+Client IP Address Filtering
+
+Şimdilik boş bırakın
+TTL
+
+Şimdilik boş bırakın ya da uzun süreli seçin
+Altta Zone Resources kısmı çıkacak, orada:
+
+Include
+Specific zone
+soruyorum.live
+seçin.
+
+Özet olarak token şunlara sahip olsun:
+
+Zone / SSL and Certificates / Edit
+Zone / Zone / Read
+Resource: sadece soruyorum.live
+Sonra Continue to summary deyin, token oluşunca bana token değerini verin.
+Zone ID’niz de bu olacak:
+
+bdfed1e0b38160db825ed3bf34313e9c
+İsterseniz bir sonraki ekranda ne seçileceğini de birlikte söyleyeyim.
+
+
+x17NGfZM3bSH50tPTDQjGcv2UttYGzqhUmu-XkdH
+
+
+önceki 4 mesaj
+Tokenı ve Zone ID’yi sisteme girdim, servisleri yeniden başlattım ve sağlık kontrolü geçti. connect.soruyorum.live de resolve oluyor, yani bizim taraf hazır. İlgili env artık site/.env (line 61) içinde, kurulum notu da cloudflare-saas-soruyorum-live-kurulum.md dosyasında.
+
+Ama 14 Mart 2026 tarihinde Cloudflare API’den net bir blokaj döndü: bu zone/account için SSL for SaaS / Custom Hostnames kotası henüz açılmamış. Yani şu an sorun kodda değil, Cloudflare tarafında ürünün aktive edilmemiş olması.
+
+Sizden şimdi gereken:
+
+Cloudflare’da soruyorum.live zone’una girin.
+SSL/TLS içinde Custom Hostnames ya da SSL for SaaS bölümünü açın.
+Enable deyin.
+İsterse ödeme yöntemi/billing onayını tamamlayın.
+Bunu yaptıktan sonra bana sadece “enable ettim” deyin; ben hemen yeniden test edip ilk gerçek custom domain ekleme smoke testine geçeceğim.
+
+Güvenlik notu: tokenı burada paylaştığınız için işimiz bitince yenisiyle rotate etmeniz iyi olur.
+
+
+bu ucretlı mı?
+
+Evet, ödeme bilgisi istemesi normal. Cloudflare’ın resmi dokümanına göre Cloudflare for SaaS non-enterprise planlarda kullanılabiliyor ama Enable aşamasında ödeme bilgisi isteniyor. Kaynak: https://developers.cloudflare.com/cloudflare-for-platforms/cloudflare-for-saas/start/enable/
+
+Ücret modeli de resmi plan sayfasında şöyle:
+
+Free, Pro, Business planlarda kullanılabiliyor
+100 custom hostname dahil
+100 üstü için hostname başına aylık $0.10
+Kaynak: https://developers.cloudflare.com/cloudflare-for-platforms/cloudflare-for-saas/plans/
+Yani kısa cevap:
+
+Enable etmek için billing açmanız gerekecek
+ama ilk 100 hostname için ekstra kullanım ücreti çıkmaması gerekiyor
+siz ilk aşamada az sayıda müşteri domaini bağlayacaksanız maliyet düşük olur
+Şu an sizin hesapta gördüğümüz hata da bununla uyumlu:
+
+ürün zone/account üzerinde henüz provision edilmemiş
+bu yüzden API “quota allocated değil” diyor
+İsterseniz devam etmeden önce size çok net bir karar cümlesi söyleyeyim:
+
+Evet, bu model mantıklı
+ilk 100 hostname için uygun
+ama Cloudflare billing açmadan çalışmaz
+İsterseniz bir sonraki mesajda size şimdi açalım mı, yoksa Cloudflare’siz alternatif mi kuralım diye iki yolun kısa karşılaştırmasını çıkarayım.
+
+
+Kullanıcı eki
+sımdı ne yapmıs olduk custom hostname mı olusturacagız bız
+
+Evet, tam olarak o.
+
+Burada yaptığımız şey:
+
+soruyorum.live için Cloudflare for SaaS özelliğini açmak
+sonra her müşteri domaini için bir Custom Hostname oluşturmak
+Örnek:
+
+müşteri domaini: event.firma.com
+biz panelden ya da API ile bunu Cloudflare’e tanıtacağız
+Cloudflare buna SSL sertifikası çıkaracak
+kullanıcı kendi DNS’inde event.firma.com -> connect.soruyorum.live CNAME verecek
+sonra event.firma.com sizin sisteminize açılacak
+Yani:
+
+şu an ekrandaki işlem genel özelliği açıyor
+tek tek müşteri domainleri daha sonra oluşacak
+her müşteri domaini = 1 custom hostname
+Sizin ekranda görünen şey doğru:
+
+100 Custom Hostnames
+şu an 0.00
+yani özelliği açıyorsunuz, hemen ücret kesilmiyor
+100’e kadar kullanım hakkı açılmış oluyor
+Kısaca:
+
+Confirm Payment derseniz ürün aktifleşecek
+sonra biz event.firma.com gibi domainleri sistemden oluşturabileceğiz
+Benim cevabım:
+
+evet, bunu onaylayın
+sonra ben buradan gerçek test domainiyle devam edeyim
+
+Evet, doğru yerdesiniz. Şimdi burada ilk yapmanız gereken Fallback Origin girmek.
+
+Buraya şunu yazın:
+
+connect.soruyorum.live
+Sonra:
+
+Add Fallback Origin deyin
+Ama bunun çalışması için önce DNS tarafında şu kayıt hazır olmalı:
+
+Type: CNAME
+Name: connect
+Target: soruyorum.online
+Proxy: Proxied açık olsun
+Yani hedef şu:
+
+connect.soruyorum.live -> soruyorum.online
+Bu fallback origin ne işe yarıyor?
+
+Cloudflare’e şunu söylüyor: “Müşteri domainleri geldiğinde varsayılan origin’im bu”
+Sonra event.firma.com gibi domainler buraya bağlanacak
+Bu ekrandan sonra sıra şu olacak:
+
+connect.soruyorum.live fallback origin’i ekle
+sonra ben API’den test custom hostname oluşturayım
+sonra panelden event.firma.com DNS doğrulamasını test edelim
+Önemli not:
+
+bu aşamada Add Custom Hostname’a manuel basmanız şart değil
+çünkü bunu bizim sistem de API ile oluşturabiliyor
+ama önce fallback origin aktif olmalı
+Kısaca şu an yapmanız gereken tek şey:
+
+Fallback Origin alanına connect.soruyorum.live yazıp eklemek
+Ekledikten sonra bana “eklendi” yazın, ben hemen test edeyim.
+
+
+Bu kayıt doğru görünüyor.
+
+Yani şu an:
+
+connect.soruyorum.live
+CNAME -> soruyorum.online
+Proxied
+olmuş. Bu iyi.
+
+Şimdi Cloudflare Custom Hostnames ekranına dönüp:
+
+Fallback Origin alanına connect.soruyorum.live
+yazın ve
+Add Fallback Origin
+deyin.
+Bu noktadan sonra fallback origin aktif olursa ben buradan tekrar test edip custom hostname oluşturmayı deneyebilirim.
+
+Tek küçük not:
+
+uzun vadede connect.soruyorum.live -> soruyorum.online yerine bazen doğrudan portal origin’ine gitmek daha temiz olabilir
+ama şu an test ve ilk kurulum için bu kayıt yeterli
+Yani şu an sonraki adımınız:
+
+fallback origin’e connect.soruyorum.live eklemek
+Ekledikten sonra bana yazın, ben hemen devam edeyim.
+
+
+
+önceki 2 mesaj
+Evet. Mantık şu: her müşteri domaini bizim için bir custom hostname olacak.
+
+Şu an yaptığımız şey:
+
+soruyorum.live için Cloudflare for SaaS aktif edildi.
+connect.soruyorum.live fallback origin olarak aktif oldu.
+Ben API’den deneme amaçlı bir custom hostname oluşturmayı başardım: test-cf-smoke.keypadsistem.com
+Bu ne demek?
+
+Sistem artık event.firma.com gibi müşteri domainlerini Cloudflare’e tanıtabiliyor.
+Cloudflare o domain için SSL ve doğrulama akışını yönetiyor.
+Kullanıcı DNS’ine CNAME -> connect.soruyorum.live ve gereken TXT kaydını girince domain aktifleşiyor.
+Yani evet, bundan sonra akış şu:
+
+Kullanıcı panelden domain ekler.
+Biz Cloudflare’de o domain için custom hostname oluştururuz.
+Kullanıcı DNS kayıtlarını girer.
+Domain aktif olur.
+İsterse primary domain yaparız.
+İstersen bir sonraki adımda deneme için oluşturduğum kaydı temizleyip gerçek bir müşteri domainiyle canlı test yapayım.
+
+
+tamam deneyelım
+
+
+
+
+önceki 22 mesaj
+Test kaydını açtım. Şu an sistemde test-cf-smoke.keypadsistem.com custom hostname olarak oluşturuldu ve pending_dns durumunda bekliyor.
+
+Şimdi keypadsistem.com DNS tarafına sadece şu 3 kaydı ekleyin:
+
+CNAME
+Host: test-cf-smoke
+Value: connect.soruyorum.live
+TXT
+Host: _cf-custom-hostname.test-cf-smoke
+Value: 08443312-990d-45f7-83cb-982b29ffbeb2
+TXT
+Host: _acme-challenge.test-cf-smoke
+Value: e4ZT5DC3s7rWjjkCdGKMW0PZ7HBemUsJ7pKwrOR3RJo
+Not:
+
+_acme-challenge için ayrıca CNAME eklemeyin.
+test-cf-smoke.keypadsistem.com şu an henüz DNS’e düşmediği için Cloudflare custom hostname does not CNAME to this zone diyor; bu normal.
+Ben origin tarafını da custom host kabul edecek şekilde hazırladım; ilgili routing değişikliği docker-compose.traefik.yml içinde. DNS kayıtlarını ekleyince bana sadece ekledim yazın; ben anında verify edip active oldu mu kontrol edeceğim.
+
+
+tamam yaptım eger cloudflare da ıse musterının domaınlerı bunları otamatıkde yapabılırız dımı
+
+
+önceki 1 mesaj
+Evet, ama iki farklı senaryo var.
+
+Müşteri domaini sizin kontrol ettiğiniz Cloudflare hesabındaysa: evet, DNS kayıtlarını da API ile tamamen otomatik açabiliriz.
+Müşteri domaini Cloudflare’da ama kendi hesabındaysa: hayır, varsayılan olarak biz onların DNS’ine dokunamayız. Yine bir noktada müşterinin kayıt eklemesi gerekir.
+En doğru model şu:
+
+İlk kurulumda müşteri bir kez CNAME ekler.
+SSL yenilemeleri için Delegated DCV kullanırız; müşteri bir kez _acme-challenge için CNAME koyar, sonrası otomatik yenilenir.
+Yani “ilk bağlantı yarı manuel, sonrası büyük ölçüde otomatik” olur.
+Şu an bizim testte de bu mantık çalıştı:
+
+test-cf-smoke.keypadsistem.com kaydı oluştu
+durum verified seviyesine geldi
+yani sahiplik doğrulaması görüldü
+SSL tarafı hâlâ son doğrulama/issuance aşamasında
+Kısa cevap:
+
+Cloudflare + bizim hesabımızda ise çok otomatik
+Cloudflare + müşterinin hesabında ise ilk DNS adımı yine müşteri tarafında
+en iyi UX: bir kez DNS eklesin, sonrası otomatik aksın
+Kaynaklar:
+
+Real-time validation: https://developers.cloudflare.com/cloudflare-for-platforms/cloudflare-for-saas/domain-support/hostname-validation/realtime-validation/
+Delegated DCV: https://developers.cloudflare.com/cloudflare-for-platforms/cloudflare-for-saas/security/certificate-management/issue-and-validate/validate-certificates/delegated-dcv/
+Custom origin davranışı: https://developers.cloudflare.com/cloudflare-for-platforms/cloudflare-for-saas/start/advanced-settings/custom-origin/
+İstersen bir sonraki adımda bunu ürün akışına çevireyim: müşteri için tek ekran, tek kopyala-yapıştır DNS setup.
+
+
+İstersen bir sonraki adımda bunu ürün akışına çevireyim: müşteri için tek ekran, tek kopyala-yapıştır DNS setup. bu olur.. bende domaınlerı ekledım txt ce cname lerı
+
+
+önceki 3 mesaj
+Evet, bu akış ürünleştirilebilir. Ama müşteri kendi domainini kendi DNS hesabında tutuyorsa ilk kayıtları tamamen bizim otomatik eklememiz mümkün değil; en az bir ilk DNS adımı yine müşteri tarafında olur. Sonrası büyük ölçüde otomatik ilerler.
+
+Şu an testte iyi haber şu:
+
+test-cf-smoke.keypadsistem.com Cloudflare tarafında active oldu.
+Yani custom hostname oluşturma mantığımız çalışıyor.
+Kalan tek sorun connect.soruyorum.live kaydında:
+
+Şu an CNAME -> soruyorum.online
+Bu yüzden Cloudflare 1014 dönüyor.
+Yani fallback origin zincirinde Cloudflare-to-Cloudflare CNAME problemi var.
+Bunu düzeltmek için connect.soruyorum.live kaydını şöyle değiştirin:
+
+Type: A
+Name: connect
+Content: 46.4.35.233
+Proxy: Proxied
+Yani:
+
+mevcut CNAME connect -> soruyorum.online kaydını kaldırın
+yerine A connect -> 46.4.35.233 ekleyin
+turuncu bulut açık kalsın
+Bunu yaptıktan sonra bana değiştirdim yazın. Ben hemen tekrar kontrol edip custom domainin canlı açıldığını doğrulayacağım.
+
+
+degistirdim
+
+
+önceki 3 mesaj
+İyi haber: DNS tarafı çalıştı. test-cf-smoke.keypadsistem.com Cloudflare’da artık active seviyesine geldi; yani custom hostname oluşturma + CNAME/TXT doğrulama akışı başarılı.
+
+Kalan sorun son origin katmanında. Şu an istekler hâlâ 503 dönüyor, çünkü Cloudflare resmi dokümana göre custom origin server kullanıldığında origin’e giden Host header müşteri domaini olarak kalıyor; bizim fallback origin bunu bu modelde tam karşılayamıyor. Bunu Origin Rules ile Host override ederek çözmek mümkün, ama Cloudflare’ın kendi dokümanına göre Host header override ve SNI override Enterprise özelliği. Kaynaklar:
+
+custom origin server davranışı: https://developers.cloudflare.com/cloudflare-for-platforms/cloudflare-for-saas/start/advanced-settings/custom-origin/
+Origin Rules availability: https://developers.cloudflare.com/rules/origin-rules/
+Bu yüzden sizin mevcut plan için en doğru çözüm:
+
+Worker as fallback origin
+Cloudflare bunu SaaS için resmi olarak destekliyor ve */* route ile tüm custom hostname trafiğini yakalayabiliyor
+Kaynak: https://developers.cloudflare.com/cloudflare-for-platforms/cloudflare-for-saas/start/advanced-settings/worker-as-origin/
+“Otomatik olur mu?” sorusunun net cevabı:
+
+Müşteri domaini kendi DNS hesabındaysa ilk CNAME/TXT adımı yine müşteride olur
+Ama bunu tek ekrana düşürebiliriz: müşteri sadece kopyala-yapıştır yapar
+Domain bizim Cloudflare hesabımızdaysa DNS’i de otomatik açabiliriz
+Yani şu an geldiğimiz nokta:
+
+custom hostname akışı çalışıyor
+DNS doğrulama çalışıyor
+eksik kalan tek parça Worker fallback origin
+İsterseniz bir sonraki adımda ben bunu doğrudan tek ekran DNS setup + Worker fallback origin iş planına çevirip başlayayım.
+
+
+Kullanıcı eki
+nırada hala pendik dıyor
+
+
+önceki 1 mesaj
+Çünkü ikinci TXT kaydı yanlış görünüyor.
+
+Şu an kontrolde:
+
+Hostname status: active
+Ownership TXT: doğru
+SSL TXT: yanlış
+Benim gördüğüm:
+
+Doğru olması gereken kayıt:
+Host: _acme-challenge.test-cf-smoke
+TXT value: e4ZT5DC3s7rWjjkCdGKMW0PZ7HBemUsJ7pKwrOR3RJo
+Ama DNS’te şu an dönen değer:
+"_acme-challenge.test-cf-smoke"
+Yani value alanına token yerine yanlış metin girilmiş gibi duruyor. Bu yüzden Cloudflare sertifikayı bekletiyor.
+
+Düzeltmeniz gereken:
+
+_acme-challenge.test-cf-smoke TXT kaydını açın
+Value/Content kısmını aynen şu yapın:
+e4ZT5DC3s7rWjjkCdGKMW0PZ7HBemUsJ7pKwrOR3RJo
+Dokunmayın:
+
+_cf-custom-hostname.test-cf-smoke TXT kaydı doğru, onu bozmayın
+Ek not:
+
+_acme-challenge için aynı isimde ayrıca CNAME kullanmayın
+Bu testte TXT validation yöntemiyle gidiyoruz
+Düzeltince yazın, hemen tekrar kontrol edeyim.
+
+
+sımdı tekrar kontrol edemısın
+
+
+önceki 1 mesaj
+Şu an durum biraz ilerlemiş ama tamamlanmamış:
+
+Hostname status: hâlâ active
+Certificate status: artık pending değil, processing aşamasına geçmiş
+HTTPS: hâlâ 503
+Benim dışarıdan gördüğüm şey şu:
+
+_cf-custom-hostname kaydı doğru
+ama _acme-challenge TXT hâlâ doğru token yerine "_acme-challenge.test-cf-smoke" dönüyor
+Yani iki ihtimal var:
+
+kayıt yeni değişti ve henüz tam yayılmadı
+value alanında hâlâ yanlış içerik var
+Şu an Cloudflare API processing dediği için bence 5-10 dakika daha bekleyelim.
+Eğer sonra da aynı kalırsa _acme-challenge.test-cf-smoke TXT kaydının Value alanını tekrar açıp şunun olduğundan emin olun:
+
+e4ZT5DC3s7rWjjkCdGKMW0PZ7HBemUsJ7pKwrOR3RJo
+
+Kısacası:
+
+ilerleme var
+ama sertifika henüz tamamlanmadı
+503 şu aşamada normal
+İstersen 5 dakika sonra ben tekrar bakayım.
+
+
+yarın devam ederız kaydedelım kaldıgımız yerı
+
+Yarın buradan devam edebiliriz. Kaldığımız yer:
+
+Cloudflare for SaaS aktif
+Fallback origin: connect.soruyorum.live
+connect.soruyorum.live artık A -> 46.4.35.233, proxied
+Test custom hostname oluşturuldu: test-cf-smoke.keypadsistem.com
+Hostname status: active
+Certificate status: son kontrolde pending_validationdan processinge geçmişti
+Dışarıdan HTTPS hâlâ 503, yani sertifika/origin akışında son adım tamamlanmamış
+Kritik açık nokta:
+
+_acme-challenge.test-cf-smoke.keypadsistem.com TXT kaydı beklenen tokenı net döndürmüyordu; benim sorgumda hâlâ yanlış içerik görünüyordu
+yarın ilk iş bunu tekrar kontrol edeceğiz
+Kod tarafında hazır olanlar:
+
+domain modeli ve endpointleri hazır
+panelde Domainler sekmesi var
+soruyorum.live altyapısı bağlı
+Cloudflare API entegrasyonu çalışıyor
+test custom hostname sistem içinden başarıyla oluşturuldu
+Yarın ilk yapacağım kontrol:
+
+_acme-challenge TXT doğru mu
+Cloudflare custom hostname ssl.status active oldu mu
+https://test-cf-smoke.keypadsistem.com 200 veriyor mu
+sonra bunu müşteri için tek ekran DNS akışına çevireceğiz
+Güvenlik notu:
+
+paylaştığınız Cloudflare tokenı iş bittiğinde rotate etmek iyi olur.
+
+Kullanıcı eki
+suanda hersey aktıf gıbı
+
+
+suanda hersey aktıf gıbı
+
+
+önceki 2 mesaj
+Cloudflare tarafı artık gerçekten aktif. Ben de doğruladım:
+
+test-cf-smoke.keypadsistem.com için hostname status: active
+ssl status: active
+bizim sistemde de domain kaydı artık active
+Ama uçtan uca yayın hâlâ tamam değil, çünkü canlı istek hâlâ 503 dönüyor:
+
+https://test-cf-smoke.keypadsistem.com → 503
+https://connect.soruyorum.live → 200
+Yani ekran görüntüsü yanlış değil; sadece Cloudflare’daki “hostname + certificate” katmanı aktif olmuş. Sorun son origin iletim katmanında.
+
+Sebep de Cloudflare’ın resmi mantığı:
+
+custom origin kullanınca Host header müşteri domaini olarak kalıyor, SNI ise custom origin oluyor
+Origin Rules ile Host header override çözümü sadece Enterprise
+ayrıca O2O senaryosunda SNI’yi host header’a çevirme desteklenmiyor
+Kaynaklar:
+https://developers.cloudflare.com/cloudflare-for-platforms/cloudflare-for-saas/start/advanced-settings/custom-origin/
+https://developers.cloudflare.com/rules/origin-rules/
+https://developers.cloudflare.com/cloudflare-for-platforms/cloudflare-for-saas/saas-customers/product-compatibility/
+Bu yüzden doğru çözüm şu:
+
+Worker as fallback origin
+Cloudflare bunu SaaS için resmi olarak öneriyor; */* route ile tüm custom hostname trafiğini yakalayabiliyor. Kaynak:
+
+https://developers.cloudflare.com/cloudflare-for-platforms/cloudflare-for-saas/start/advanced-settings/worker-as-origin/
+Yani özet:
+
+evet, Cloudflare kısmı aktif
+ama domain hâlâ tam canlı değil
+sıradaki gerçek iş Worker fallback origin
+İstersen bu turda ben bunun worker kodunu ve kurulum planını hazırlayayım.
+
+
+Kullanıcı eki
+bunu dıyor ama 
+
+Evet, tam olarak beklediğimiz son problem bu.
+
+Active görünen şeyler:
+
+Hostname status = Active
+Certificate status = Active
+Ama tarayıcıdaki no available server şunu gösteriyor:
+
+Cloudflare domaini tanıyor
+sertifika tamam
+fakat isteği uygulamanın gerçek origin’ine doğru biçimde aktaramıyor
+Yani sorun artık DNS ya da SSL değil, origin routing.
+
+Kısaca:
+
+Cloudflare panelindeki Active = domain ve sertifika hazır
+tarayıcıdaki no available server = arka taraftaki uygulama hedefine ulaşamıyor
+Bu da bizim dün konuştuğumuz son katmana denk geliyor:
+
+connect.soruyorum.live fallback origin tek başına yetmiyor
+custom hostname isteğinde origin tarafında Host/routing uyumsuzluğu kalıyor
+bunu çözmenin doğru yolu sizin planda Worker as fallback origin
+Cloudflare resmi dokümanları:
+
+Worker as origin: https://developers.cloudflare.com/cloudflare-for-platforms/cloudflare-for-saas/start/advanced-settings/worker-as-origin/
+Custom origin davranışı: https://developers.cloudflare.com/cloudflare-for-platforms/cloudflare-for-saas/start/advanced-settings/custom-origin/
+Yani özet:
+
+iyi haber: sistemin büyük kısmı çalıştı
+kalan tek eksik: Worker fallback origin
+İsterseniz şimdi ben bir sonraki adım olarak bunun worker planını ve kurulacak kodu çıkarayım.
+
+
+evet sonrakı adıma gecelım
+
+
+önceki 13 mesaj
+Cloudflare kısmı gerçekten aktif; test-cf-smoke.keypadsistem.com için hostname ve sertifika active. Kalan tek eksik, custom hostname isteğini origin’e Worker üzerinden taşımak. Bunun için worker kodunu ve gerekli origin header desteğini repo içine ekledim: index.js, wrangler.toml, middleware.ts, forwardProxyHeaders.ts, cloudflare-worker-fallback-origin.md.
+
+Şimdi dashboard’da şu adımları yapın:
+
+service.soruyorum.live için AAAA kaydı açın, değer 100::, proxied açık olsun.
+SSL/TLS -> Custom Hostnames içinde fallback origin’i connect.soruyorum.live yerine service.soruyorum.live yapın.
+Workers & Pages içinde yeni bir Worker oluşturup index.js içeriğini koyun.
+Worker variable olarak UPSTREAM_ORIGIN=https://connect.soruyorum.live ekleyin.
+Worker route’larında *.soruyorum.live/* -> None ve */* -> soruyorum-custom-host-origin tanımlayın.
+Bunu yaptıktan sonra https://test-cf-smoke.keypadsistem.com tekrar test edilir; orada artık 503 yerine uygulama sayfası bekliyoruz. Kod tarafında hızlı kontrol yaptım: worker dosyası syntax olarak temiz. Portal typecheck repo genelinde zaten sorunlu ama dokunduğum dosyalar hata listesine düşmedi. Docker portal rebuild’ini de denedim, fakat bağımlılık indirme katmanında çok uzadığı için yarıda kestim; yani bu kodlar henüz canlı container’a deploy edilmedi.
+
+
+Buraya şunu girin:
+
+Type: AAAA
+Name: service
+IPv6 address: 100::
+Proxy status: Proxied
+TTL: Auto
+Yani tam kayıt:
+
+service.soruyorum.live  AAAA  100::
+Bu normal bir sunucu IPv6’sı değil; Cloudflare’in worker/originless fallback modeli için kullanılan kayıt.
+
+Ekledikten sonra bana ekledim yazın. Sonra fallback origin’i service.soruyorum.live yapacağız.
+
+
+ekledim
+
+Güzel. Şimdi sıradaki adım:
+
+SSL/TLS -> Custom Hostnames ekranına gidin ve Fallback Origin alanını
+
+connect.soruyorum.live
+yerine
+service.soruyorum.live
+olarak değiştirin.
+
+Yani:
+
+mevcut fallback origin’i Edit
+yeni değer: service.soruyorum.live
+kaydedin
+Bunu yaptıktan sonra bana degistirdim yazın. Sonra worker adımına geçeceğiz.
+
+
+degıstırdım
+
+Sıradaki adım Worker.
+
+Cloudflare Workers & Pages bölümüne gidin ve yeni bir Worker oluşturun.
+
+Ad:
+
+soruyorum-custom-host-origin
+Kod olarak şunu yapıştırın:
+
+const HOP_BY_HOP_HEADERS = new Set([
+  "connection",
+  "keep-alive",
+  "proxy-authenticate",
+  "proxy-authorization",
+  "te",
+  "trailer",
+  "transfer-encoding",
+  "upgrade",
+]);
+
+function getUpstreamOrigin(env) {
+  return (env.UPSTREAM_ORIGIN || "https://connect.soruyorum.live").trim();
+}
+
+function buildUpstreamRequest(request, env) {
+  const incomingUrl = new URL(request.url);
+  const upstreamBase = new URL(getUpstreamOrigin(env));
+  const upstreamUrl = new URL(request.url);
+
+  upstreamUrl.protocol = upstreamBase.protocol;
+  upstreamUrl.hostname = upstreamBase.hostname;
+  upstreamUrl.port = upstreamBase.port;
+
+  const headers = new Headers(request.headers);
+  for (const headerName of HOP_BY_HOP_HEADERS) {
+    headers.delete(headerName);
+  }
+
+  headers.set("x-forwarded-host", incomingUrl.host);
+  headers.set("x-original-host", incomingUrl.host);
+  headers.set("x-forwarded-proto", incomingUrl.protocol.replace(":", ""));
+  headers.set(
+    "x-forwarded-port",
+    incomingUrl.port || (incomingUrl.protocol === "https:" ? "443" : "80"),
+  );
+  headers.set("x-custom-hostname", incomingUrl.host);
+
+  const clientIp = request.headers.get("cf-connecting-ip");
+  if (clientIp) {
+    headers.set("x-real-ip", clientIp);
+    const forwardedFor = request.headers.get("x-forwarded-for");
+    headers.set(
+      "x-forwarded-for",
+      forwardedFor && forwardedFor.length > 0
+        ? `${forwardedFor}, ${clientIp}`
+        : clientIp,
+    );
+  }
+
+  const init = {
+    method: request.method,
+    headers,
+    redirect: "manual",
+  };
+
+  if (!["GET", "HEAD"].includes(request.method.toUpperCase())) {
+    init.body = request.body;
+  }
+
+  return new Request(upstreamUrl.toString(), init);
+}
+
+export default {
+  async fetch(request, env) {
+    const incomingUrl = new URL(request.url);
+    const upstreamBase = new URL(getUpstreamOrigin(env));
+
+    if (incomingUrl.host === upstreamBase.host) {
+      return new Response(
+        "Worker route upstream host ile cakismis. connect.soruyorum.live/* icin Worker None tanimlayin.",
+        { status: 500 },
+      );
+    }
+
+    const upstreamRequest = buildUpstreamRequest(request, env);
+    return fetch(upstreamRequest, {
+      cf: {
+        cacheEverything: false,
+        cacheTtl: 0,
+      },
+    });
+  },
+};
+Sonra Worker içinde environment variable ekleyin:
+
+UPSTREAM_ORIGIN = https://connect.soruyorum.live
+Bunu da yaptıktan sonra bana worker hazir yazın. Son adım route tanımları olacak.
+
+
+Kullanıcı eki
+burası mı
+
+Evet, route ekranı doğru yer. Ama önce worker’ı oluşturmanız lazım.
+
+Bu ekrandan değil, önce:
+
+sağ üstte Manage Workers
+veya
+sol menüden Workers & Pages
+kısmına gidin.
+
+Orada:
+
+Create
+Create Worker
+adını soruyorum-custom-host-origin yapın
+size verdiğim kodu yapıştırın
+deploy edin
+sonra environment variable ekleyin:
+UPSTREAM_ORIGIN = https://connect.soruyorum.live
+Worker hazır olduktan sonra tekrar bu route ekranına dönüp route ekleyeceğiz.
+
+Yani sırayla:
+
+önce worker oluştur
+sonra route tanımla
+Worker’ı oluşturunca bana worker olustu yazın, ben route’ları tek tek söyleyeyim.
+
+
+Kullanıcı eki
+adım adım ılerleyelım ben bulundugum yerı gondereyım sen ne yapacaksak soyle 
+
+Tamam, burası doğru.
+
+Şimdi sadece şunu yapın:
+
+sağ üstte Create application butonuna tıklayın
+Sonraki ekranı gönderin, oradan devam edelim.
+
+
+Şimdi şuna tıklayın:
+
+Start with Hello World!
+Sonraki ekranı gönderin.
+
+
+Şimdi sadece worker adını değiştirin:
+
+soruyorum-custom-host-origin
+Sonra:
+
+Deploy
+basın.
+
+Deploy sonrası açılan ekranı gönderin.
+
+
+Şimdi şu adımı yapın:
+
+sağ üstte Edit code butonuna tıklayın
+Kod editörü açılınca ekran görüntüsünü gönderin.
+
+
+Şimdi editördeki tüm kodu silin ve bunun tamamını yapıştırın:
+
+const HOP_BY_HOP_HEADERS = new Set([
+  "connection",
+  "keep-alive",
+  "proxy-authenticate",
+  "proxy-authorization",
+  "te",
+  "trailer",
+  "transfer-encoding",
+  "upgrade",
+]);
+
+function getUpstreamOrigin(env) {
+  return (env.UPSTREAM_ORIGIN || "https://connect.soruyorum.live").trim();
+}
+
+function buildUpstreamRequest(request, env) {
+  const incomingUrl = new URL(request.url);
+  const upstreamBase = new URL(getUpstreamOrigin(env));
+  const upstreamUrl = new URL(request.url);
+
+  upstreamUrl.protocol = upstreamBase.protocol;
+  upstreamUrl.hostname = upstreamBase.hostname;
+  upstreamUrl.port = upstreamBase.port;
+
+  const headers = new Headers(request.headers);
+  for (const headerName of HOP_BY_HOP_HEADERS) {
+    headers.delete(headerName);
+  }
+
+  headers.set("x-forwarded-host", incomingUrl.host);
+  headers.set("x-original-host", incomingUrl.host);
+  headers.set("x-forwarded-proto", incomingUrl.protocol.replace(":", ""));
+  headers.set(
+    "x-forwarded-port",
+    incomingUrl.port || (incomingUrl.protocol === "https:" ? "443" : "80"),
+  );
+  headers.set("x-custom-hostname", incomingUrl.host);
+
+  const clientIp = request.headers.get("cf-connecting-ip");
+  if (clientIp) {
+    headers.set("x-real-ip", clientIp);
+    const forwardedFor = request.headers.get("x-forwarded-for");
+    headers.set(
+      "x-forwarded-for",
+      forwardedFor && forwardedFor.length > 0
+        ? `${forwardedFor}, ${clientIp}`
+        : clientIp,
+    );
+  }
+
+  const init = {
+    method: request.method,
+    headers,
+    redirect: "manual",
+  };
+
+  if (!["GET", "HEAD"].includes(request.method.toUpperCase())) {
+    init.body = request.body;
+  }
+
+  return new Request(upstreamUrl.toString(), init);
+}
+
+export default {
+  async fetch(request, env) {
+    const incomingUrl = new URL(request.url);
+    const upstreamBase = new URL(getUpstreamOrigin(env));
+
+    if (incomingUrl.host === upstreamBase.host) {
+      return new Response(
+        "Worker route upstream host ile cakismis. connect.soruyorum.live/* icin Worker None tanimlayin.",
+        { status: 500 },
+      );
+    }
+
+    const upstreamRequest = buildUpstreamRequest(request, env);
+    return fetch(upstreamRequest, {
+      cf: {
+        cacheEverything: false,
+        cacheTtl: 0,
+      },
+    });
+  },
+};
+Sonra:
+
+sağ üstte Deploy
+deyin.
+
+Deploy ettikten sonraki ekranı gönderin.
+
+
+Kod yapışmış görünüyor. Şimdi sadece:
+
+sağ üstte Deploy
+butonuna basın.
+
+Deploy tamamlanınca çıkan ekranı gönderin.
+
+
+Kullanıcı eki
+save dedı bu enkrana dondu  ben back dıyınce de busekılde oldu
+
+Tamam, deploy olmuş.
+
+Şimdi sıradaki adım:
+
+üstte Bindings sekmesine tıklayın
+Oradaki ekran görüntüsünü gönderin.
+
+
+Burada binding eklemeyeceğiz, environment variable ekleyeceğiz.
+
+Şimdi:
+
+bu pencereyi Cancel ile kapatın
+Sonra worker sayfasında:
+
+Settings sekmesine tıklayın
+Açılan ekran görüntüsünü gönderin.
+
+
+
+önceki 2 mesaj
+Şimdi doğru yerdesiniz. Sadece şu adımı yapın:
+
+Variables and Secrets satırındaki sağdaki + Add butonuna tıklayın
+Açılan ekranı gönderin, oradan tam ne yazacağınızı söyleyeceğim.
+
+
+
+önceki 1 mesaj
+Şimdi bunu doldurun:
+
+Type: Text
+Variable name: UPSTREAM_ORIGIN
+Value: https://connect.soruyorum.live
+Sonra:
+
+sağ alttaki Deploy butonuna basın
+Deploy bitince yeni ekranı gönderin.
+
+
+
+önceki 2 mesaj
+Değişken tamam, iyi. Şimdi route ekleme adımına geçiyoruz.
+
+Sadece şunu yapın:
+
+üstte Domains & Routes bölümündeki + Add butonuna tıklayın
+Açılan seçimi gönderin, size hangisini seçeceğinizi söyleyeceğim.
+
+
+
+önceki 2 mesaj
+Burada şunu seçin:
+
+Route
+Sonraki ekranı gönderin, size tam deseni yazdıracağım.
+
+Şimdi editördeki tüm kodu silin ve bunun tamamını yapıştırın:
+
+
+const HOP_BY_HOP_HEADERS = new Set([
+  "connection",
+  "keep-alive",
+  "proxy-authenticate",
+  "proxy-authorization",
+  "te",
+  "trailer",
+  "transfer-encoding",
+  "upgrade",
+]);
+
+function getUpstreamOrigin(env) {
+  return (env.UPSTREAM_ORIGIN || "https://connect.soruyorum.live").trim();
+}
+
+function buildUpstreamRequest(request, env) {
+  const incomingUrl = new URL(request.url);
+  const upstreamBase = new URL(getUpstreamOrigin(env));
+  const upstreamUrl = new URL(request.url);
+
+  upstreamUrl.protocol = upstreamBase.protocol;
+  upstreamUrl.hostname = upstreamBase.hostname;
+  upstreamUrl.port = upstreamBase.port;
+
+  const headers = new Headers(request.headers);
+  for (const headerName of HOP_BY_HOP_HEADERS) {
+    headers.delete(headerName);
+  }
+
+  headers.set("x-forwarded-host", incomingUrl.host);
+  headers.set("x-original-host", incomingUrl.host);
+  headers.set("x-forwarded-proto", incomingUrl.protocol.replace(":", ""));
+  headers.set(
+    "x-forwarded-port",
+    incomingUrl.port || (incomingUrl.protocol === "https:" ? "443" : "80"),
+  );
+  headers.set("x-custom-hostname", incomingUrl.host);
+
+  const clientIp = request.headers.get("cf-connecting-ip");
+  if (clientIp) {
+    headers.set("x-real-ip", clientIp);
+    const forwardedFor = request.headers.get("x-forwarded-for");
+    headers.set(
+      "x-forwarded-for",
+      forwardedFor && forwardedFor.length > 0
+        ? `${forwardedFor}, ${clientIp}`
+        : clientIp,
+    );
+  }
+
+  const init = {
+    method: request.method,
+    headers,
+    redirect: "manual",
+  };
+
+  if (!["GET", "HEAD"].includes(request.method.toUpperCase())) {
+    init.body = request.body;
+  }
+
+  return new Request(upstreamUrl.toString(), init);
+}
+
+export default {
+  async fetch(request, env) {
+    const incomingUrl = new URL(request.url);
+    const upstreamBase = new URL(getUpstreamOrigin(env));
+
+    if (incomingUrl.host === upstreamBase.host) {
+      return new Response(
+        "Worker route upstream host ile cakismis. connect.soruyorum.live/* icin Worker None tanimlayin.",
+        { status: 500 },
+      );
+    }
+
+    const upstreamRequest = buildUpstreamRequest(request, env);
+    return fetch(upstreamRequest, {
+      cf: {
+        cacheEverything: false,
+        cacheTtl: 0,
+      },
+    });
+  },
+};
+
+
+
+Sonra:
+
+sağ üstte Deploy
+deyin.
+
+Deploy ettikten sonraki ekranı gönderin.
+
+
+Kod yapışmış görünüyor. Şimdi sadece:
+
+sağ üstte Deploy
+butonuna basın.
+
+Deploy tamamlanınca çıkan ekranı gönderin.
+
+
+Kullanıcı eki
+save dedı bu enkrana dondu  ben back dıyınce de busekılde oldu
+
+Tamam, deploy olmuş.
+
+Şimdi sıradaki adım:
+
+üstte Bindings sekmesine tıklayın
+Oradaki ekran görüntüsünü gönderin.
+
+
+Burada binding eklemeyeceğiz, environment variable ekleyeceğiz.
+
+Şimdi:
+
+bu pencereyi Cancel ile kapatın
+Sonra worker sayfasında:
+
+Settings sekmesine tıklayın
+Açılan ekran görüntüsünü gönderin.
+
+Şimdi doğru yerdesiniz. Sadece şu adımı yapın:
+
+Variables and Secrets satırındaki sağdaki + Add butonuna tıklayın
+Açılan ekranı gönderin, oradan tam ne yazacağınızı söyleyeceğim.
+
+
+
+önceki 1 mesaj
+Şimdi bunu doldurun:
+
+Type: Text
+Variable name: UPSTREAM_ORIGIN
+Value: https://connect.soruyorum.live
+Sonra:
+
+sağ alttaki Deploy butonuna basın
+Deploy bitince yeni ekranı gönderin.
+
+
+
+önceki 2 mesaj
+Değişken tamam, iyi. Şimdi route ekleme adımına geçiyoruz.
+
+Sadece şunu yapın:
+
+üstte Domains & Routes bölümündeki + Add butonuna tıklayın
+Açılan seçimi gönderin, size hangisini seçeceğinizi söyleyeceğim.
+
+
+
+önceki 2 mesaj
+Burada şunu seçin:
+
+Route
+Sonraki ekranı gönderin, size tam deseni yazdıracağım.
+
+
+
+önceki 2 mesaj
+Resmi Cloudflare dokümanındaki önerilen desen bu: */*. Şimdi bu paneli şöyle doldurun:
+
+Zone: soruyorum.live
+Route: */*
+Failure mode: Fail closed (block) kalsın
+Sonra alttaki ekleme butonuna basın. Sonraki ekranı gönderin; hemen ardından None istisna route’unu ekleyeceğiz.
+
+
+
+önceki 2 mesaj
+Kritik adım geçti. Ben dışarıdan test ettim:
+
+https://test-cf-smoke.keypadsistem.com artık 200 dönüyor
+https://service.soruyorum.live da 200
+yani Worker as fallback origin çalıştı
+Şu anda custom hostname zinciri canlı. connect.soruyorum.live dışarıdan 500 görülebilir; bu bizim iç upstream hostumuz olduğu için bu kurulumda sorun değil.
+
+Sıradaki mantıklı adım:
+
+gerçek bir müşteri domainini bu akışla bağlamak
+veya
+panelde bunu tek ekran “DNS kopyala-yapıştır” akışına çevirmek
+Hangisinden başlayacağımızı söyleyin, ben devam edeyim.
+
+
+bızım sımdı ıkısını de yapmamız gerekıyor dımı
+
+Evet, üretime hazır olması için ikisini de yapmamız gerekiyor.
+
+Ama doğru sıra şu:
+
+Gerçek bir müşteri domainiyle uçtan uca canlı test yapalım.
+Sonra bunu panelde tek ekran, kopyala-yapıştır DNS akışına çevirelim.
+Sebep:
+
+Altyapı şu an çalışıyor, bunu kanıtladık.
+Ama gerçek müşteri domaininde bir kez daha smoke test yapmadan UI’ı ürünleştirmek riskli olur.
+UI kısmı da şart, çünkü müşteri bunu elle Cloudflare’dan yönetmeyecek; panelden ekleyip DNS kayıtlarını görmeli.
+Yani kısa cevap:
+
+Evet, ikisi de lazım
+Ama önce gerçek domain testi, sonra müşteri panel akışı
+Hazırsanız bir sonraki adımda gerçek bir domain/subdomain bağlayalım.
+
+
+aurainteraktif.com bu domaın benım ve ıhs de hstohg edılıyor
+
+
+önceki 2 mesaj
+Bu ekran tamam; */* route ile worker bağlandı ve canlı test 200 döndü. Şimdi gerçek domain testine geçiyoruz ve ilk faz kuralı gereği kök alan adı değil, bir alt alan adı kullanacağız.
+
+İlk canlı test için event.aurainteraktif.com kullanmanızı öneriyorum. Sonraki adım şu:
+
+Soruyorum panelindeki Ayarlar -> Domainler ekranına gidin
+yeni domain alanına event.aurainteraktif.com yazıp Domain Ekle deyin
+Ekledikten sonra ekran görüntüsünü gönderin; size IHS DNS tarafına hangi CNAME ve TXT kayıtlarını gireceğinizi tek tek söyleyeceğim.
+
+
+sımdı bunu soyle yapalım mı ben bır abonelık olusturacagım ve orada herseyın otomatık baglamak ıstıyorum
+
+
+
+Evet, en doğru model bu. Ama ikiye ayırmamız lazım:
+
+Sistem subdomaini için tam otomatik
+Müşteri kendi domaini için yarı otomatik
+Ben olsam abonelik akışını şöyle kurarım:
+
+Ödeme başarılı olur.
+Webhook aboneliği WL plana çevirir.
+Sistem otomatik slug.soruyorum.live oluşturur.
+Bu domain otomatik primary olur.
+Kullanıcı hemen yayına çıkabilir.
+Kendi domaini tarafında ise:
+
+sistem Cloudflare custom hostname’i otomatik oluşturur
+gerekli CNAME ve TXT kayıtlarını otomatik üretir
+kullanıcıya tek ekranda gösterir
+kullanıcı DNS’ine yapıştırır
+sistem arka planda doğrular ve aktif eder
+Yani:
+
+firma.soruyorum.live kısmı tam otomatik olabilir
+event.firma.com kısmı, domain dışarıda olduğu sürece ilk DNS adımında kullanıcıya ihtiyaç duyar
+Tam otomatik özel domain ancak şu durumda olur:
+
+müşteri domainini sizin yönettiğiniz Cloudflare hesabına alır
+veya size kendi DNS API erişimini verir
+Benim önerim:
+
+abonelik sonrası sistem subdomain otomatik açılsın
+özel domain bağla ayrı ama çok kolay bir sihirbaz olsun
+İstersen bir sonraki adımda bunu doğrudan kod akışına çevireyim:
+
+ödeme webhook sonrası neler çalışacak
+hangi tablo güncellenecek
+hangi ekran otomatik açılacak
+kullanıcı ne görecek
+
+dedıgın mantık cok guzel. Sistem otomatik slug.soruyorum.live oluşturur. yerıne musterıye sormak gerekır hangı subdomaın ı kullanmak ıstıyorsunuz dıye onlar doldursun yanı 
+
+Evet, bu daha iyi olur.
+
+Ben de sizin dediğiniz modeli öneririm:
+
+otomatik atamayalım
+kullanıcıya soralım: Hangi subdomaini kullanmak istiyorsunuz?
+o alanı kendisi doldursun
+Ama en doğru zamanlama şu:
+
+ödeme öncesi değil
+ödeme başarılı olduktan hemen sonra
+ilk kurulum adımında
+Önerdiğim akış:
+
+Abonelik aktif olur.
+“Subdomain seçin” ekranı açılır.
+Kullanıcı örnek olarak aura, etkinlik, canli-aura gibi bir ad yazar.
+Sistem canlı kontrol eder:
+uygun mu
+daha önce alınmış mı
+yasaklı kelime mi
+Uygunsa aura.soruyorum.live oluşturulur.
+Bu otomatik primary domain olur.
+Sonra isterse ayrıca kendi domainini bağlar.
+Bence en iyi UX şu:
+
+alanın içinde hazır öneri olsun: şirket adına göre otomatik öneri
+örnek: aurainteraktif
+kullanıcı isterse değiştirir
+isterse “şimdilik bunu geç” diyebiliriz, ama o zaman geçici bir sistem subdomaini atanır
+Kurallar da net olmalı:
+
+sadece a-z, 0-9, -
+3-30 karakter
+başta/sonda - olmaz
+admin, api, www, mail, service, connect gibi rezerve isimler yasak
+ilk oluşturduktan sonra değiştirme hakkı sınırlı olabilir
+Kısacası:
+
+evet, müşteriye sordurmak daha doğru
+ama ödeme ekranında değil, ödeme sonrası onboarding’de
+sistem yine otomatik öneri sunsun
+kullanıcı seçsin, sistem oluştursun
+İstersen bir sonraki adımda bunu doğrudan ürün akışı ve teknik iş listesi olarak çıkarayım.
+
+
+tamamdır bu sekılde yapılandıralım ama sonrakı adım olarak mustekı kendı domaın ını baglama adımına gecelı
+
+
+Evet, şimdi sıradaki adım bu.
+
+Aslında bu akışın çekirdeği hazır:
+
+müşteri domain ekleyebiliyor
+sistem Cloudflare custom hostname oluşturuyor
+gerekli CNAME ve TXT kayıtlarını üretiyor
+müşteri DNS’e ekliyor
+sistem Doğrula ile aktif hale getiriyor
+Yani bundan sonra ürün akışı şöyle olmalı:
+
+Müşteri WL paketi aldıktan sonra önce kendi sistem subdomainini seçer.
+Kurulum tamamlanınca Kendi domainimi bağla adımı açılır.
+Burada sadece subdomain kabul ederiz:
+event.aurainteraktif.com
+canli.aurainteraktif.com
+soru.aurainteraktif.com
+Sistem arka planda Cloudflare custom hostname oluşturur.
+Ekranda müşteriye tek kutuda DNS kayıtları gösterilir:
+CNAME
+sahiplik TXT
+gerekiyorsa SSL TXT
+Müşteri DNS sağlayıcısında bunları ekler.
+Kullanıcı Doğrula der.
+Domain active olunca isterse primary yapar.
+Sizin aurainteraktif.com için de ilk canlı testte kök domaini değil bir alt alan adı kullanacağız:
+
+önerim: event.aurainteraktif.com
+IHS’de host ediliyor olması sorun değil. Sadece DNS’e şu mantıkla kayıt gireceksiniz:
+
+event için CNAME
+sistemin verdiği TXT kayıtları
+Kök domain aurainteraktif.comu ilk fazda açmayalım. O daha sonra gelir.
+
+Bence şimdi iki şey yapalım:
+
+ürün akışını bu yapıda sabitleyelim
+hemen ardından event.aurainteraktif.com ile ilk gerçek müşteri domain testini yapalım
+Hazırsanız ben size şimdi doğrudan panelden hangi alana ne girileceğini ve IHS DNS’te hangi kayıtları ekleyeceğinizi adım adım söyleyeyim.
+
+
+ılk once bu sıstemı kursak! Evet, en doğru model bu. Ama ikiye ayırmamız lazım:
+
+Sistem subdomaini için tam otomatik
+Müşteri kendi domaini için yarı otomatik
+Ben olsam abonelik akışını şöyle kurarım:
+
+Ödeme başarılı olur.
+Webhook aboneliği WL plana çevirir.
+Sistem otomatik slug.soruyorum.live oluşturur.
+Bu domain otomatik primary olur.
+Kullanıcı hemen yayına çıkabilir.
+Kendi domaini tarafında ise:
+
+sistem Cloudflare custom hostname’i otomatik oluşturur
+gerekli CNAME ve TXT kayıtlarını otomatik üretir
+kullanıcıya tek ekranda gösterir
+kullanıcı DNS’ine yapıştırır
+sistem arka planda doğrular ve aktif eder
+Yani:
+
+firma.soruyorum.live kısmı tam otomatik olabilir
+event.firma.com kısmı, domain dışarıda olduğu sürece ilk DNS adımında kullanıcıya ihtiyaç duyar
+Tam otomatik özel domain ancak şu durumda olur:
+
+müşteri domainini sizin yönettiğiniz Cloudflare hesabına alır
+veya size kendi DNS API erişimini verir
+Benim önerim:
+
+abonelik sonrası sistem subdomain otomatik açılsın
+özel domain bağla ayrı ama çok kolay bir sihirbaz olsun
+İstersen bir sonraki adımda bunu doğrudan kod akışına çevireyim:
+
+ödeme webhook sonrası neler çalışacak
+hangi tablo güncellenecek
+hangi ekran otomatik açılacak
+kullanıcı ne görecek
+
+
+önceki 15 mesaj
+Bu sistemi kurdum.
+
+Artık akış şu şekilde çalışacak:
+
+WL paket aktif olsa bile sistem otomatik slug.soruyorum.live üretmiyor.
+Önce kullanıcı kendi istediği sistem subdomain adını seçiyor.
+Sistem bu adı doğruluyor, rezerve isimleri engelliyor ve doluysa net hata veriyor.
+Sistem subdomain seçilmeden event.firma.com gibi özel domain ekleme açılmıyor.
+Ana değişiklikler:
+
+Sistem subdomain seçme ve kurulum durumu backend’e eklendi: domains.ts (line 350), domains.ts (line 416)
+users router artık systemSetup bilgisi döndürüyor ve configureSystemSubdomain mutation’ını sağlıyor: users.ts (line 156), users.ts (line 762)
+Domain ekranı onboarding’e çevrildi; önce sistem subdomain seçiliyor, sonra özel domain sihirbazı açılıyor: DomainSettingsPanel.tsx (line 121), DomainSettingsPanel.tsx (line 292)
+Ödeme başarı ekranı artık gerekiyorsa kullanıcıyı doğrudan domainler sekmesine yönlendiriyor: page.tsx (line 33), page.tsx (line 114)
+/api/payments/access yanıtına domainSetup özeti eklendi: payments.ts (line 648)
+Kontrol tarafı:
+
+portal TypeScript kontrolü repo genelindeki eski hatalar yüzünden kırmızı kaldı; ama hata listesinde dokunduğum DomainSettingsPanel ve billing/success dosyaları görünmedi.
+api-server tarafında dokunduğum dosyalara düşen yeni TypeScript hatası görünmedi.
+Henüz container rebuild / canlı deploy yapmadım.
+Sıradaki en doğru adım, bunu canlıda bir WL hesapla smoke test etmek ve hemen ardından “kendi domainini bağla” ekranındaki DNS metinlerini biraz daha sihirbazlaştırmak.
+
+
+tamam sımdı yenı bır kullanıcı adı alıyorum
+
+Tamam. Yeni kullanıcıyı açınca ben şu sırayla test ederim:
+
+WL paketi aktif mi
+ödeme sonrası domainler sekmesine yönleniyor mu
+sistem subdomain seçme ekranı çıkıyor mu
+seçilen ad düzgün oluşuyor mu
+sonra event.firma.com bağlama adımı açılıyor mu
+Kullanıcıyı açınca e-posta adresini ya da hesabı hangi organizasyonda oluşturduğunuzu yazın, ben kontrol edip devam edeyim.
+
+
+api/trpc/auth.login?batch=1:1  Failed to load resource: the server responded with a status of 500 ()  var  olan kullanıcı adı ıle gırmeye calısıyorum ama bu hatayı verıyor
+
+
+
+

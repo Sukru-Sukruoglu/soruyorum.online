@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { createEvent, startEvent, updateEvent, Event } from '@/services/api';
+import { fetchPortalAuthSession, logoutPortalSession } from '@/utils/authSession';
 import PinDisplay from './PinDisplay';
 import QRCodeDisplay from './QRCodeDisplay';
 import EventSettingsForm, { EventFormData } from './EventSettingsForm';
@@ -115,9 +116,8 @@ export default function CreateEventModal({
             setMatchingStartLevel(typeof activeLevelId === 'number' ? activeLevelId : 1);
         }
 
-        // Pre-check for token to avoid 401
-        const token = localStorage.getItem('auth_token') || localStorage.getItem('token');
-        if (!token) {
+        const session = await fetchPortalAuthSession().catch(() => null);
+        if (!session?.authenticated) {
             alert('Lütfen önce giriş yapınız.');
             router.push('/login');
             return;
@@ -196,9 +196,9 @@ export default function CreateEventModal({
         } catch (error: any) {
             if (error.response?.status === 401) {
                 alert("Oturum süreniz dolmuş. Lütfen tekrar giriş yapın.");
-                localStorage.removeItem('auth_token');
-                localStorage.removeItem('token');
-                window.location.href = '/login';
+                void logoutPortalSession().finally(() => {
+                    window.location.href = '/login';
+                });
                 return;
             }
             alert(error.response?.data?.error || 'Etkinlik oluşturulamadı');
@@ -244,7 +244,7 @@ export default function CreateEventModal({
                                 } else if (event.eventType === 'wordcloud') {
                                     router.push(`/events/new/wordcloud?id=${event.id}`)
                                 } else if (event.eventType === 'matching') {
-                                    window.location.href = `https://ksinteraktif.com/esiniBul/game_v2.html?event_id=${event.id}&seviye=${matchingStartLevel}`;
+                                    window.location.href = `https://soruyorum.online/esiniBul/game_v2.html?event_id=${event.id}&seviye=${matchingStartLevel}`;
                                 } else {
                                     router.push(`/events/${event.id}/edit`)
                                 }
@@ -284,7 +284,7 @@ export default function CreateEventModal({
     if (step === 'template') {
         return (
             <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4 animate-in fade-in duration-200" onClick={onClose}>
-                <div className="bg-white rounded-xl shadow-2xl w-full max-w-2xl overflow-hidden" onClick={(e) => e.stopPropagation()}>
+                <div className="light-panel bg-white rounded-xl shadow-2xl w-full max-w-2xl overflow-hidden" onClick={(e) => e.stopPropagation()}>
                     <div className="flex items-center justify-between p-4 border-b border-gray-100">
                         <h2 className="text-xl font-semibold text-gray-800">Etkinlik Türü Seçin</h2>
                         <button onClick={onClose} className="p-1 hover:bg-gray-100 rounded-full transition-colors">
@@ -316,7 +316,7 @@ export default function CreateEventModal({
     if (step === 'settings') {
         return (
             <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4 overflow-y-auto">
-                <div className="bg-white rounded-xl shadow-2xl w-full max-w-4xl my-8 relative animate-in zoom-in-95 duration-200">
+                <div className="light-panel bg-white rounded-xl shadow-2xl w-full max-w-4xl my-8 relative animate-in zoom-in-95 duration-200">
                     <button
                         onClick={onClose}
                         className="absolute top-4 right-4 p-2 bg-white/50 hover:bg-gray-100 rounded-full text-gray-600 transition-colors z-10"
@@ -343,7 +343,12 @@ export default function CreateEventModal({
                                     title: eventToEdit.name || eventToEdit.title || '',
                                     eventType: (eventToEdit.eventType || (eventToEdit as any).event_type) as any,
                                     description: (eventToEdit as any).description || '',
-                                    maxParticipants: (eventToEdit as any).maxParticipants ?? (eventToEdit as any).max_participants ?? 100,
+                                    maxParticipants:
+                                        (eventToEdit as any).maxParticipants !== undefined
+                                            ? (eventToEdit as any).maxParticipants
+                                            : (eventToEdit as any).max_participants !== undefined
+                                                ? (eventToEdit as any).max_participants
+                                                : 100,
                                     eventPin: (eventToEdit as any).eventPin ?? (eventToEdit as any).event_pin ?? (eventToEdit as any).pin,
                                     joinUrl: (eventToEdit as any).joinUrl ?? (eventToEdit as any).join_url,
                                     qrCodeUrl: (eventToEdit as any).qrCodeUrl ?? (eventToEdit as any).qr_code_url,
@@ -387,7 +392,7 @@ export default function CreateEventModal({
     if (step === 'details' && event) {
         return (
             <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4 animate-in fade-in zoom-in duration-200">
-                <div className="bg-white rounded-xl shadow-2xl w-full max-w-2xl overflow-hidden flex flex-col max-h-[90vh]">
+                <div className="light-panel bg-white rounded-xl shadow-2xl w-full max-w-2xl overflow-hidden flex flex-col max-h-[90vh]">
                     <div className="flex items-center justify-between p-4 border-b border-gray-100 flex-shrink-0">
                         <h2 className="text-xl font-semibold text-gray-800 truncate pr-4">{event.title}</h2>
                         <button onClick={onClose} className="p-1 hover:bg-gray-100 rounded-full transition-colors">

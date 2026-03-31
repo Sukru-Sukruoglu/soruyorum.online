@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { router, protectedProcedure, superAdminProcedure } from "../trpc";
 import { redis } from "../config/redis";
+import { normalizeIp, resolveGeoForIp } from "../utils/geo";
 import { getOrganizationAccess } from "../utils/access";
 
 const WS_SERVER_URL = process.env.WS_SERVER_URL || 'http://localhost:4001';
@@ -87,6 +88,12 @@ function normalizeStatusFilter(value: string | undefined): string | null {
     if (!value) return null;
     const normalized = value.trim().toLowerCase();
     return normalized.length > 0 && normalized !== "all" ? normalized : null;
+}
+
+function maxIsoDate(...values: Array<Date | null | undefined>): string | null {
+    const filtered = values.filter((value): value is Date => value instanceof Date);
+    if (filtered.length === 0) return null;
+    return filtered.reduce((latest, current) => current.getTime() > latest.getTime() ? current : latest).toISOString();
 }
 
 export const dashboardRouter = router({
@@ -293,6 +300,7 @@ export const dashboardRouter = router({
             ts: number;
             firstSeen: number;
             referrer?: string;
+            geo?: Awaited<ReturnType<typeof resolveGeoForIp>>;
         }> = [];
 
         if (visitorKeys.length > 0) {
@@ -318,11 +326,268 @@ export const dashboardRouter = router({
         }
         visitors.sort((a, b) => b.ts - a.ts);
 
+        const onlineUserIds = onlineUsers.map((user) => user.userId);
+        const [userAuditLogs, recentAuditLogs] = await Promise.all([
+            onlineUserIds.length > 0
+                ? ctx.prisma.audit_logs.findMany({
+                      where: { user_id: { in: onlineUserIds } },
+                      orderBy: { created_at: "desc" },
+                      take: 250,
+                      select: {
+                          id: true,
+                          user_id: true,
+                          action: true,
+                          resource: true,
+                          resource_id: true,
+                          details: true,
+                          ip_address: true,
+                          user_agent: true,
+                          created_at: true,
+                          users: {
+                              select: {
+                                  id: true,
+                                  name: true,
+                                  email: true,
+                                  role: true,
+                              },
+                          },
+                          organizations: {
+                              select: {
+                                  id: true,
+                                  name: true,
+                              },
+                          },
+                      },
+                  })
+                : Promise.resolve([]),
+            ctx.prisma.audit_logs.findMany({
+                orderBy: { created_at: "desc" },
+                take: 80,
+                select: {
+                    id: true,
+                    user_id: true,
+                    action: true,
+                    resource: true,
+                    resource_id: true,
+                    details: true,
+                    ip_address: true,
+                    user_agent: true,
+                    created_at: true,
+                    users: {
+                        select: {
+                            id: true,
+                            name: true,
+                            email: true,
+                            role: true,
+                        },
+                    },
+                    organizations: {
+                        select: {
+                            id: true,
+                            name: true,
+                        },
+                    },
+                },
+            }),
+        ]);
+
+        const uniqueIps = Array.from(new Set([
+            ...visitors.map((visitor) => normalizeIp(visitor.ip)).filter((value): value is string => Boolean(value)),
+            ...wsStats.connections.map((connection) => normalizeIp(connection.address)).filter((value): value is string => Boolean(value)),
+            ...recentAuditLogs.map((log) => normalizeIp(log.ip_address)).filter((value): value is string => Boolean(value)),
+            ...userAuditLogs.map((log) => normalizeIp(log.ip_address)).filter((value): value is string => Boolean(value)),
+        ]));
+
+        const geoEntries = await Promise.all(
+            uniqueIps.map(async (ip) => [ip, await resolveGeoForIp(ip)] as const)
+        );
+        const geoMap = Object.fromEntries(geoEntries);
+
+        const onlineUserAuditMap = new Map<string, typeof userAuditLogs>();
+        for (const log of userAuditLogs) {
+            if (!log.user_id) continue;
+            const existing = onlineUserAuditMap.get(log.user_id) ?? [];
+            existing.push(log);
+            onlineUserAuditMap.set(log.user_id, existing);
+        }
+
+        const enrichedOnlineUsers = onlineUsers.map((user) => {
+            const logs = onlineUserAuditMap.get(user.userId) ?? [];
+            const latestLog = logs[0] ?? null;
+            const recentIps = Array.from(new Set(
+                logs
+                    .map((log) => normalizeIp(log.ip_address))
+                    .filter((value): value is string => Boolean(value))
+            )).slice(0, 4);
+
+            return {
+                ...user,
+                lastAction: latestLog
+                    ? {
+                          action: latestLog.action,
+                          resource: latestLog.resource,
+                          resourceId: latestLog.resource_id,
+                          createdAt: latestLog.created_at.toISOString(),
+                          ipAddress: normalizeIp(latestLog.ip_address),
+                          userAgent: latestLog.user_agent,
+                          geo: latestLog.ip_address ? geoMap[normalizeIp(latestLog.ip_address) ?? ""] ?? null : null,
+                      }
+                    : null,
+                recentIps: recentIps.map((ip) => ({
+                    ip,
+                    geo: geoMap[ip] ?? null,
+                })),
+                lastSeenAt: maxIsoDate(
+                    latestLog?.created_at ?? null,
+                    new Date(user.sessionExpiresAt)
+                ),
+            };
+        });
+
+        const enrichedVisitors = visitors.map((visitor) => {
+            const normalizedVisitorIp = normalizeIp(visitor.ip) ?? visitor.ip;
+            return {
+                ...visitor,
+                ip: normalizedVisitorIp,
+                geo: visitor.geo ?? geoMap[normalizedVisitorIp] ?? null,
+            };
+        });
+
+        const enrichedConnections = wsStats.connections.map((connection) => {
+            const normalizedConnectionIp = normalizeIp(connection.address) ?? connection.address;
+            return {
+                ...connection,
+                address: normalizedConnectionIp,
+                geo: geoMap[normalizedConnectionIp] ?? null,
+            };
+        });
+
+        const recentActivity = recentAuditLogs.map((log) => {
+            const normalizedLogIp = normalizeIp(log.ip_address);
+            return {
+                id: log.id,
+                action: log.action,
+                resource: log.resource,
+                resourceId: log.resource_id,
+                details: readJsonRecord(log.details),
+                createdAt: log.created_at.toISOString(),
+                ipAddress: normalizedLogIp,
+                userAgent: log.user_agent,
+                geo: normalizedLogIp ? geoMap[normalizedLogIp] ?? null : null,
+                user: log.users
+                    ? {
+                          id: log.users.id,
+                          name: log.users.name || "İsimsiz",
+                          email: log.users.email,
+                          role: log.users.role,
+                      }
+                    : null,
+                organization: log.organizations
+                    ? {
+                          id: log.organizations.id,
+                          name: log.organizations.name,
+                      }
+                    : null,
+            };
+        });
+
+        const ipActivityMap = new Map<string, {
+            ip: string;
+            geo: Awaited<ReturnType<typeof resolveGeoForIp>>;
+            liveConnections: number;
+            activeVisitors: number;
+            recentActions: number;
+            users: Set<string>;
+            pages: Set<string>;
+            lastSeenAt: string | null;
+        }>();
+
+        const touchIp = (ip: string | null | undefined, patch?: {
+            geo?: Awaited<ReturnType<typeof resolveGeoForIp>>;
+            userEmail?: string | null;
+            page?: string | null;
+            liveConnections?: number;
+            activeVisitors?: number;
+            recentActions?: number;
+            seenAt?: string | null;
+        }) => {
+            const normalized = normalizeIp(ip);
+            if (!normalized) return;
+
+            const current = ipActivityMap.get(normalized) ?? {
+                ip: normalized,
+                geo: geoMap[normalized] ?? null,
+                liveConnections: 0,
+                activeVisitors: 0,
+                recentActions: 0,
+                users: new Set<string>(),
+                pages: new Set<string>(),
+                lastSeenAt: null,
+            };
+
+            if (patch?.geo !== undefined) current.geo = patch.geo;
+            if (patch?.userEmail) current.users.add(patch.userEmail);
+            if (patch?.page) current.pages.add(patch.page);
+            if (patch?.liveConnections) current.liveConnections += patch.liveConnections;
+            if (patch?.activeVisitors) current.activeVisitors += patch.activeVisitors;
+            if (patch?.recentActions) current.recentActions += patch.recentActions;
+            if (patch?.seenAt && (!current.lastSeenAt || patch.seenAt > current.lastSeenAt)) {
+                current.lastSeenAt = patch.seenAt;
+            }
+
+            ipActivityMap.set(normalized, current);
+        };
+
+        for (const visitor of enrichedVisitors) {
+            touchIp(visitor.ip, {
+                geo: visitor.geo ?? null,
+                page: visitor.page,
+                activeVisitors: 1,
+                seenAt: new Date(visitor.ts).toISOString(),
+            });
+        }
+
+        for (const connection of enrichedConnections) {
+            touchIp(connection.address, {
+                geo: connection.geo ?? null,
+                liveConnections: 1,
+                seenAt: connection.connectedAt,
+            });
+        }
+
+        for (const item of recentActivity) {
+            touchIp(item.ipAddress, {
+                geo: item.geo ?? null,
+                userEmail: item.user?.email ?? null,
+                recentActions: 1,
+                seenAt: item.createdAt,
+            });
+        }
+
+        const ipActivity = Array.from(ipActivityMap.values())
+            .map((entry) => ({
+                ip: entry.ip,
+                geo: entry.geo,
+                liveConnections: entry.liveConnections,
+                activeVisitors: entry.activeVisitors,
+                recentActions: entry.recentActions,
+                users: Array.from(entry.users),
+                pages: Array.from(entry.pages).slice(0, 5),
+                lastSeenAt: entry.lastSeenAt,
+            }))
+            .sort((left, right) => {
+                const leftScore = left.liveConnections + left.activeVisitors + left.recentActions;
+                const rightScore = right.liveConnections + right.activeVisitors + right.recentActions;
+                if (rightScore !== leftScore) return rightScore - leftScore;
+                return (right.lastSeenAt ?? "").localeCompare(left.lastSeenAt ?? "");
+            })
+            .slice(0, 50);
+
         return {
             live: {
                 totalConnections: wsStats.totalConnections,
                 rooms: enrichedRooms,
-                connections: wsStats.connections,
+                connections: enrichedConnections,
                 wsUptime: wsStats.uptime,
             },
             platform: {
@@ -331,11 +596,13 @@ export const dashboardRouter = router({
                 totalEvents,
                 activeEvents: activeEventsCount,
             },
-            onlineUsers,
+            onlineUsers: enrichedOnlineUsers,
             visitors: {
-                total: visitors.length,
-                list: visitors,
+                total: enrichedVisitors.length,
+                list: enrichedVisitors,
             },
+            recentActivity,
+            ipActivity,
             timestamp: wsStats.timestamp,
         };
     }),

@@ -12,7 +12,7 @@ function hasQandaModerationPermission(user: { role?: string | null; email?: stri
     if (!user) return false;
     if (isSuperAdmin(user)) return true;
     const role = normalizeRole(user.role);
-    return role === 'admin' || role === 'moderator' || role === 'organizer';
+    return role === 'admin' || role === 'junioradmin' || role === 'moderator' || role === 'organizer';
 }
 
 function requireQandaModerationPermission(user: { role?: string | null; email?: string | null } | null | undefined, action: string): void {
@@ -270,5 +270,46 @@ export const qandaRouter = router({
             });
 
             return { ok: true, featuredQuestionId: input.questionId };
+        }),
+
+    setLiveQrExpanded: protectedProcedure
+        .input(z.object({
+            eventId: z.string(),
+            expanded: z.boolean(),
+        }))
+        .mutation(async ({ ctx, input }) => {
+            const superAdmin = isSuperAdmin(ctx.user);
+            const event = await ctx.prisma.events.findFirst({
+                where: superAdmin
+                    ? { id: input.eventId }
+                    : { id: input.eventId, organization_id: ctx.user.organizationId },
+                select: { id: true, settings: true },
+            });
+
+            if (!event) {
+                throw new TRPCError({ code: 'FORBIDDEN', message: 'Event access denied' });
+            }
+
+            requireQandaModerationPermission(ctx.user, 'control live QR');
+
+            const settings: any = (event as any).settings || {};
+            const qanda: any = settings.qanda || {};
+            const commandAt = new Date().toISOString();
+
+            const nextSettings = {
+                ...settings,
+                qanda: {
+                    ...qanda,
+                    liveQrExpanded: input.expanded,
+                    liveQrCommandAt: commandAt,
+                },
+            };
+
+            await ctx.prisma.events.update({
+                where: { id: input.eventId },
+                data: { settings: nextSettings, updated_at: new Date() },
+            });
+
+            return { ok: true, expanded: input.expanded, commandAt };
         }),
 });

@@ -34,7 +34,7 @@ export const invitationsRouter = router({
             }
 
             // Check if user has permission (admin or organizer)
-            if (ctx.user.role !== 'admin' && ctx.user.role !== 'organizer') {
+            if (ctx.user.role !== 'admin' && ctx.user.role !== 'junioradmin' && ctx.user.role !== 'organizer') {
                 throw new TRPCError({
                     code: 'FORBIDDEN',
                     message: 'Only admins and organizers can send invitations',
@@ -114,7 +114,7 @@ export const invitationsRouter = router({
             const where: any = {};
 
             // Filter by organization if not admin
-            if (ctx.user.role !== 'admin') {
+            if (ctx.user.role !== 'admin' && ctx.user.role !== 'junioradmin') {
                 where.organization_id = ctx.user.organizationId;
             }
 
@@ -169,7 +169,7 @@ export const invitationsRouter = router({
             }
 
             // Check if user has permission
-            if (ctx.user.role !== 'admin' && ctx.user.role !== 'organizer') {
+            if (ctx.user.role !== 'admin' && ctx.user.role !== 'junioradmin' && ctx.user.role !== 'organizer') {
                 throw new TRPCError({
                     code: 'FORBIDDEN',
                     message: 'Only admins and organizers can delete invitations',
@@ -190,6 +190,7 @@ export const invitationsRouter = router({
             // Check if invitation belongs to user's organization
             if (
                 ctx.user.role !== 'admin' &&
+                ctx.user.role !== 'junioradmin' &&
                 invitation.organization_id !== ctx.user.organizationId
             ) {
                 throw new TRPCError({

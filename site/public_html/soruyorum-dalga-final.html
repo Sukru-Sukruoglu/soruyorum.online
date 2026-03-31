@@ -1,0 +1,338 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+<meta charset="UTF-8">
+<title>SoruYorum — Konuşma Dalgası Logo</title>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;700;800&display=swap" rel="stylesheet">
+<script>
+  window.addEventListener('DOMContentLoaded', () => {
+    const canvas = document.createElement('canvas');
+    canvas.width = 64; canvas.height = 64;
+    const ctx = canvas.getContext('2d');
+
+    // Arka plan dairesi
+    ctx.beginPath();
+    ctx.arc(32, 32, 32, 0, Math.PI * 2);
+    ctx.fillStyle = '#0B192C';
+    ctx.fill();
+
+    // Dalga barları
+    const bars = [
+      { x: 5,  h: 14, color: '#1A3A6A' },
+      { x: 13, h: 24, color: '#1E4A88' },
+      { x: 21, h: 34, color: '#FFD25D' },
+      { x: 29, h: 22, color: '#FF3B30' },
+      { x: 37, h: 12, color: '#1A3A6A' },
+    ];
+    bars.forEach(b => {
+      const y = (64 - b.h) / 2;
+      ctx.beginPath();
+      ctx.roundRect(b.x, y, 6, b.h, 3);
+      ctx.fillStyle = b.color;
+      ctx.fill();
+    });
+
+    // ? işareti
+    ctx.font = 'bold 24px Georgia, serif';
+    ctx.fillStyle = '#FF3B30';
+    ctx.shadowColor = 'rgba(255,59,48,0.9)';
+    ctx.shadowBlur = 8;
+    ctx.fillText('?', 47, 41);
+    ctx.shadowBlur = 0;
+
+    // Favicon
+    const link = document.createElement('link');
+    link.rel = 'icon';
+    link.type = 'image/png';
+    link.href = canvas.toDataURL('image/png');
+    document.head.appendChild(link);
+
+    // Önizleme kutusuna ekle
+    const preview = document.getElementById('favicon-preview');
+    if (preview) {
+      canvas.style.cssText = 'width:64px;height:64px;border-radius:12px;';
+      preview.appendChild(canvas.cloneNode());
+      // 32x32
+      const c32 = document.createElement('canvas');
+      c32.width = 32; c32.height = 32;
+      c32.getContext('2d').drawImage(canvas, 0, 0, 32, 32);
+      c32.style.cssText = 'width:32px;height:32px;border-radius:6px;';
+      preview.appendChild(c32);
+      // 16x16
+      const c16 = document.createElement('canvas');
+      c16.width = 16; c16.height = 16;
+      c16.getContext('2d').drawImage(canvas, 0, 0, 16, 16);
+      c16.style.cssText = 'width:16px;height:16px;border-radius:3px;';
+      preview.appendChild(c16);
+
+      // PNG indir butonu
+      const btn = document.createElement('button');
+      btn.textContent = '⬇ Favicon PNG İndir (64×64)';
+      btn.onclick = () => {
+        const a = document.createElement('a');
+        a.download = 'soruyorum-favicon.png';
+        a.href = canvas.toDataURL('image/png');
+        a.click();
+      };
+      btn.style.cssText = 'margin-left:16px;padding:8px 16px;background:#FF3B30;color:white;border:none;border-radius:6px;cursor:pointer;font-size:12px;font-family:Space Grotesk,sans-serif;font-weight:600;letter-spacing:0.5px;';
+      preview.appendChild(btn);
+    }
+  });
+</script>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: 'Space Grotesk', sans-serif;
+    background: #060E1E;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    min-height: 100vh;
+    gap: 28px;
+    padding: 40px;
+  }
+
+  @keyframes pulse {
+    0%   { transform: scale(1); opacity: 0.8; }
+    60%  { transform: scale(2.0); opacity: 0; }
+    100% { transform: scale(1); opacity: 0; }
+  }
+
+  /* Ses dalgası barları — sabit */
+
+  .card {
+    border-radius: 20px;
+    padding: 52px 64px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 100%;
+    max-width: 620px;
+  }
+  .card-dark  { background: #0B192C; border: 1px solid #152236; }
+  .card-mid   { background: #0D1F3C; border: 1px solid rgba(255,59,48,0.12); }
+  .card-light { background: #ffffff; border: 1px solid #E0EAF5; }
+
+  .label {
+    font-size: 10px;
+    letter-spacing: 3px;
+    text-transform: uppercase;
+    color: #1E3050;
+    font-weight: 500;
+    width: 100%;
+    max-width: 620px;
+    text-align: left;
+    padding-left: 4px;
+  }
+
+  /* ======= LOGO YAPISI ======= */
+  .logo {
+    display: flex;
+    align-items: center;
+    gap: 0;
+  }
+
+  /* Ses dalgası barları */
+  .wave-bars {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    margin-right: 20px;
+    height: 60px;
+  }
+
+  .bar {
+    width: 7px;
+    border-radius: 4px;
+    animation-timing-function: ease-in-out;
+    animation-iteration-count: infinite;
+  }
+
+  .bar-1 { background: #1A3A6A; height: 18px; }
+  .bar-2 { background: #1E4A88; height: 32px; }
+  .bar-3 { background: #FFD25D; height: 50px; }
+  .bar-4 { background: #FF3B30; height: 36px; }
+  .bar-5 { background: #1A3A6A; height: 20px; }
+
+  /* Dikey ayıraç */
+  .divider {
+    width: 1.5px;
+    height: 54px;
+    background: #1A3060;
+    border-radius: 1px;
+    margin-right: 20px;
+    flex-shrink: 0;
+  }
+
+  /* Metin bloğu */
+  .text-block {
+    display: flex;
+    flex-direction: column;
+    line-height: 1;
+    gap: 2px;
+  }
+
+  .soru {
+    font-family: 'Space Grotesk', sans-serif;
+    font-size: 16px;
+    font-weight: 800;
+    letter-spacing: 7px;
+    color: #FF3B30;
+    text-shadow: 0 0 14px rgba(255,59,48,0.6), 0 0 4px rgba(255,59,48,0.3);
+    text-transform: uppercase;
+  }
+
+  .yorum-line {
+    display: flex;
+    align-items: center;
+  }
+
+  .y-text, .rum-text {
+    font-size: 34px;
+    font-weight: 800;
+    color: white;
+    letter-spacing: 0.5px;
+    line-height: 1;
+  }
+
+  /* O harfi → canlı yayın noktası */
+  .o-live {
+    width: 28px;
+    height: 28px;
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    transform: translateY(-1px);
+    margin: 0 1px;
+  }
+  .o-live .ring {
+    position: absolute;
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    border: 1.5px solid #FF3B30;
+    animation: pulse 1.8s ease-out infinite;
+  }
+  .o-live .ring2 { animation-delay: 0.72s; }
+  .o-live .dot {
+    width: 18px;
+    height: 18px;
+    background: radial-gradient(circle at 38% 34%, #FF6B5B, #FF3B30);
+    border-radius: 50%;
+    box-shadow: 0 0 12px rgba(255,59,48,1), 0 0 24px rgba(255,59,48,0.4);
+    z-index: 2;
+    position: relative;
+  }
+
+  .online-text {
+    font-size: 13px;
+    font-weight: 400;
+    color: #007AFF;
+    margin-left: 2px;
+    align-self: flex-end;
+    padding-bottom: 4px;
+  }
+
+  /* Light bar renkleri */
+  .light .bar-1, .light .bar-2, .light .bar-5 { background: #D0DCF0; }
+  .light .y-text, .light .rum-text { color: #0B192C; }
+  .light .divider { background: #D0DCF0; }
+</style>
+</head>
+<body>
+
+  <!-- FAVİCON ÖNİZLEME -->
+  <div style="background:#0B192C;border:1px solid #1A3060;border-radius:14px;padding:20px 28px;width:100%;max-width:620px;display:flex;flex-direction:column;gap:12px;">
+    <span style="font-size:10px;letter-spacing:3px;text-transform:uppercase;color:#1E3050;font-weight:500;font-family:'Space Grotesk',sans-serif;">Favicon — Tarayıcı Sekmesi İkonu</span>
+    <div id="favicon-preview" style="display:flex;align-items:center;gap:14px;flex-wrap:wrap;"></div>
+    <span style="font-size:11px;color:#253550;font-family:'Space Grotesk',sans-serif;">64×64 &nbsp;·&nbsp; 32×32 &nbsp;·&nbsp; 16×16</span>
+  </div>
+
+  <!-- DARK — Ana -->
+  <span class="label">Ana Versiyon — Dark</span>
+  <div class="card card-dark">
+    <div class="logo">
+      <div class="wave-bars">
+        <div class="bar bar-1"></div>
+        <div class="bar bar-2"></div>
+        <div class="bar bar-3"></div>
+        <div class="bar bar-4"></div>
+        <div class="bar bar-5"></div>
+      </div>
+      <div class="divider"></div>
+      <div class="text-block">
+        <span class="soru">SORU</span>
+        <div class="yorum-line">
+          <span class="y-text">Y</span>
+          <div class="o-live">
+            <div class="ring"></div>
+            <div class="ring ring2"></div>
+            <div class="dot"></div>
+          </div>
+          <span class="rum-text">RUM</span>
+          <span class="online-text">.online</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- MID — Site header -->
+  <span class="label">Site Header Versiyonu</span>
+  <div class="card card-mid">
+    <div class="logo">
+      <div class="wave-bars">
+        <div class="bar bar-1"></div>
+        <div class="bar bar-2"></div>
+        <div class="bar bar-3"></div>
+        <div class="bar bar-4"></div>
+        <div class="bar bar-5"></div>
+      </div>
+      <div class="divider"></div>
+      <div class="text-block">
+        <span class="soru">SORU</span>
+        <div class="yorum-line">
+          <span class="y-text">Y</span>
+          <div class="o-live">
+            <div class="ring"></div>
+            <div class="ring ring2"></div>
+            <div class="dot"></div>
+          </div>
+          <span class="rum-text">RUM</span>
+          <span class="online-text">.online</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- LIGHT — Baskı -->
+  <span class="label" style="color:#3A5070">Light Versiyon — Baskı / E-posta</span>
+  <div class="card card-light">
+    <div class="logo light">
+      <div class="wave-bars">
+        <div class="bar bar-1" style="background:#D0DCF0"></div>
+        <div class="bar bar-2" style="background:#B0C8E8"></div>
+        <div class="bar bar-3"></div>
+        <div class="bar bar-4"></div>
+        <div class="bar bar-5" style="background:#D0DCF0"></div>
+      </div>
+      <div class="divider" style="background:#D0DCF0"></div>
+      <div class="text-block">
+        <span class="soru">SORU</span>
+        <div class="yorum-line">
+          <span class="y-text" style="color:#0B192C">Y</span>
+          <div class="o-live">
+            <div class="ring"></div>
+            <div class="ring ring2"></div>
+            <div class="dot"></div>
+          </div>
+          <span class="rum-text" style="color:#0B192C">RUM</span>
+          <span class="online-text">.online</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</body>
+</html>

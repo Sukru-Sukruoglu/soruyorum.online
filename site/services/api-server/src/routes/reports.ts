@@ -1,6 +1,7 @@
 import express from 'express';
 import { tenantContextMiddleware } from '../middleware/tenantContext';
 import { tenantDb } from '../database/tenantDb';
+import { buildQandaPdfBase64, QANDA_PDF_VERSION } from '../utils/qandaReportPdf';
 
 const router = express.Router();
 router.use(tenantContextMiddleware);
@@ -73,6 +74,8 @@ router.get('/:id/download', async (req, res, next) => {
         // Use requested format if provided, otherwise fall back to report.format
         const storedFormat = String(report.format || '').toLowerCase();
         const format = requestedFormat || (storedFormat === 'multi' ? 'pdf' : storedFormat);
+            const generatedAt = (report as any)?.generatedAt ?? (report as any)?.generated_at;
+            const eventId = (report as any)?.eventId ?? (report as any)?.event_id;
         
         const eventName = (report as any)?.events?.name || 'etkinlik';
         const safeName = String(eventName)
@@ -113,7 +116,39 @@ router.get('/:id/download', async (req, res, next) => {
         }
 
         if (format === 'pdf') {
-            const pdfBase64 = (report as any)?.data?.pdfBase64;
+            let pdfBase64 = (report as any)?.data?.pdfBase64;
+            const storedPdfVersion = Number((report as any)?.data?.pdfVersion || 0);
+
+            if (String(report.type || '').toLowerCase() === 'qanda_final' && storedPdfVersion < QANDA_PDF_VERSION) {
+                const submissions = await tenantDb.direct.qanda_submissions.findMany({
+                    where: { event_id: eventId } as any,
+                    orderBy: { created_at: 'asc' } as any,
+                });
+
+                pdfBase64 = await buildQandaPdfBase64({
+                    eventName,
+                    generatedAt: new Date(generatedAt || Date.now()),
+                    rows: (submissions || []).map((submission: any) => ({
+                        createdAt: submission.created_at,
+                        participantName: submission.participant_name,
+                        questionText: submission.question_text,
+                        status: submission.status,
+                        isAnswered: submission.is_answered,
+                    })),
+                });
+
+                await tenantDb.direct.reports.update({
+                    where: { id: reportId } as any,
+                    data: {
+                        data: {
+                            ...((report as any)?.data || {}),
+                            pdfBase64,
+                            pdfVersion: QANDA_PDF_VERSION,
+                        } as any,
+                    } as any,
+                });
+            }
+
             if (!pdfBase64) {
                 return res.status(400).json({ error: 'PDF rapor içeriği bulunamadı' });
             }

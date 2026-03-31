@@ -74,7 +74,7 @@ export function Hero() {
                     </div>
 
                     <div className="flex flex-col sm:flex-row items-center justify-center lg:justify-start gap-6 pt-4">
-                        <Link href="https://portal.ksinteraktif.com/register">
+                        <Link href="https://soruyorum.online/register">
                             <button className="text-white hover:text-red-400 font-bold flex items-center gap-2 transition-colors group">
                                 <span className="bg-red-600/20 p-2 rounded-lg group-hover:bg-red-600 group-hover:text-white transition-colors">
                                     <Users size={20} />

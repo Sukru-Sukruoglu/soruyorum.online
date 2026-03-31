@@ -59,9 +59,8 @@ function Step({
 }
 
 export default function HowToPage() {
-    const variant = (process.env.NEXT_PUBLIC_SITE_VARIANT || "").toLowerCase();
-    const joinHost = variant === "ksinteraktif" ? "mobil.ksinteraktif.com" : "mobil.soruyorum.online";
-    const screenHost = variant === "ksinteraktif" ? "(ekran alanı)" : "ekran.soruyorum.online";
+    const joinHost = "mobil.soruyorum.online";
+    const screenHost = "ekran.soruyorum.online";
 
     return (
         <div className="p-8 space-y-8 max-w-6xl">

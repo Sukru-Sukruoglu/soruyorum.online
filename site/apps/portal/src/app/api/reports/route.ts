@@ -1,18 +1,16 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { applyAuthorizationHeader } from '../_lib/authCookie';
 
 const API_URL = process.env.API_URL || 'http://localhost:4000';
 
 export async function GET(request: NextRequest) {
     try {
-        const cookie = request.headers.get('cookie') || '';
-        const authorization = request.headers.get('authorization') || '';
+        const headers = new Headers();
+        applyAuthorizationHeader(request, headers);
 
         const response = await fetch(`${API_URL}/api/reports`, {
             method: 'GET',
-            headers: {
-                ...(cookie ? { cookie } : {}),
-                ...(authorization ? { authorization } : {}),
-            },
+            headers,
         });
 
         const data = await response.json().catch(() => null);

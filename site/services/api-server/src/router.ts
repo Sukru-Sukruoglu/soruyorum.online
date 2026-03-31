@@ -6,6 +6,7 @@ import { usersRouter } from "./routers/users";
 import { qandaRouter } from "./routers/qanda";
 import { invitationsRouter } from "./routers/invitations";
 import { dashboardRouter } from "./routers/dashboard";
+import { settingsRouter } from "./routers/settings";
 
 export const appRouter = router({
     auth: authRouter,
@@ -15,6 +16,7 @@ export const appRouter = router({
     qanda: qandaRouter,
     invitations: invitationsRouter,
     dashboard: dashboardRouter,
+    settings: settingsRouter,
     health: publicProcedure.query(() => "OK"),
 });
 

@@ -4,12 +4,21 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import '@/styles/event-settings-form.css';
 import { apiClient } from '@/services/api';
-import { getRoleFromToken, isSuperAdminRole } from '@/utils/auth';
+import { isSuperAdminRole, hasFullAccessRole } from '@/utils/auth';
+import { fetchPortalAuthSession } from '@/utils/authSession';
+import { UpgradeContactModal } from '@/components/upgrade/UpgradeContactModal';
 
 type OrganizationAccess = {
     plan: string;
     hasActiveSubscription: boolean;
     isFreeOrTrial: boolean;
+    features?: {
+        maxParticipants: number;
+        maxEvents: number | null;
+        branding: boolean;
+        customDomain: boolean;
+        whiteLabel: boolean;
+    };
 };
 
 // Theme type for THEME_CATEGORIES
@@ -30,13 +39,10 @@ interface ThemeCategory {
 const fixUrl = (url: string | null | undefined): string => {
     if (!url) return '';
     const prodDomain = (() => {
-        if (typeof window === 'undefined') return 'https://mobil.ksinteraktif.com';
+        if (typeof window === 'undefined') return 'http://192.168.68.73:3001';
         const host = (window.location.hostname || '').toLowerCase();
-        if (host.includes('soruyorum.online')) return 'https://mobil.soruyorum.online';
-        if (host.includes('ksinteraktif.com')) return 'https://mobil.ksinteraktif.com';
-        const variant = (process.env.NEXT_PUBLIC_SITE_VARIANT || '').toLowerCase();
-        if (variant === 'soruyorum') return 'https://mobil.soruyorum.online';
-        return 'https://mobil.ksinteraktif.com';
+        if (host.includes('localhost') || host.includes('192.168.68.73')) return 'http://192.168.68.73:3001';
+        return window.location.origin;
     })();
     return url.replace(/https?:\/\/localhost:300[12]/g, prodDomain);
 };
@@ -54,7 +60,7 @@ export interface EventFormData {
     title: string;
     description?: string;
     eventType: 'quiz' | 'poll' | 'tombala' | 'wheel' | 'ranking' | 'wordcloud' | 'matching';
-    maxParticipants: number;
+    maxParticipants: number | null;
     // New fields for pre-generation
     eventPin?: string;
     joinUrl?: string;
@@ -133,22 +139,66 @@ export interface EventFormData {
 // Cloudflare Images base URL - soruyorum variant (1920x1080 yüksek kalite)
 const CF_IMG = 'https://imagedelivery.net/prdw3ANMyocSBJD-Do1EeQ';
 const CF_VARIANT = 'soruyorum'; // 1920x1080 variant
+const DEFAULT_THEME_BG = `${CF_IMG}/4f7f6fbe-cbf6-4b8f-4f0f-fe0255594400/soruyorum`;
+
+// Çift renk gradient temalar
+const THEMES = {
+    business: 'linear-gradient(135deg, #450a0a 0%, #dc2626 100%)',
+    social: 'linear-gradient(135deg, #f093fb 0%, #f5576c 100%)',
+    growth: 'linear-gradient(135deg, #4facfe 0%, #00f2fe 100%)',
+    tech: 'linear-gradient(135deg, #43e97b 0%, #38f9d7 100%)',
+    lifestyle: 'linear-gradient(135deg, #fa709a 0%, #fee140 100%)',
+    entertainment: 'linear-gradient(135deg, #30cfd0 0%, #330867 100%)',
+    travel: 'linear-gradient(135deg, #a8edea 0%, #fed6e3 100%)',
+    fun: 'linear-gradient(135deg, #ff9a56 0%, #ff6a88 100%)',
+    food: 'linear-gradient(135deg, #ffecd2 0%, #fcb69f 100%)',
+    music: 'linear-gradient(135deg, #ee9ca7 0%, #ffdde1 100%)',
+    blank: 'linear-gradient(135deg, #6c757d 0%, #495057 100%)',
+};
+
+const DOUBLE_THEME_NAMES: Record<keyof typeof THEMES, string> = {
+    business: 'İş',
+    social: 'Sosyal',
+    growth: 'Büyüme',
+    tech: 'Teknoloji',
+    lifestyle: 'Yaşam',
+    entertainment: 'Eğlence',
+    travel: 'Seyahat',
+    fun: 'Eğlenceli',
+    food: 'Yemek',
+    music: 'Müzik',
+    blank: 'Boş',
+};
+
+const pickPrimaryFromGradient = (gradient: string, fallback: string) => {
+    const matches = gradient.match(/#[0-9a-fA-F]{6}/g);
+    if (!matches || !matches.length) return fallback;
+    return matches[matches.length - 1] || fallback;
+};
+
+const DOUBLE_COLOR_THEMES = (Object.entries(THEMES) as Array<[keyof typeof THEMES, string]>).map(
+    ([id, background]) => ({
+        id,
+        name: DOUBLE_THEME_NAMES[id] || String(id),
+        background,
+        backgroundColor: background,
+        primaryColor: pickPrimaryFromGradient(background, '#dc2626'),
+    })
+);
 
 // Kahoot benzeri tema kategorileri - Cloudflare CDN ile yüksek kalite
 const THEME_CATEGORIES: ThemeCategory[] = [
     {
-        id: 'solid',
-        name: 'Düz Renkler',
+        id: 'featured',
+        name: '⭐ Öne Çıkan',
         themes: [
-            { id: 'purple', name: 'Mor', primaryColor: '#6366f1', backgroundColor: '#4f46e5' },
-            { id: 'blue', name: 'Mavi', primaryColor: '#3b82f6', backgroundColor: '#2563eb' },
-            { id: 'green', name: 'Yeşil', primaryColor: '#22c55e', backgroundColor: '#16a34a' },
-            { id: 'red', name: 'Kırmızı', primaryColor: '#ef4444', backgroundColor: '#dc2626' },
-            { id: 'orange', name: 'Turuncu', primaryColor: '#f97316', backgroundColor: '#ea580c' },
-            { id: 'pink', name: 'Pembe', primaryColor: '#ec4899', backgroundColor: '#db2777' },
-            { id: 'teal', name: 'Turkuaz', primaryColor: '#14b8a6', backgroundColor: '#0d9488' },
-            { id: 'dark', name: 'Koyu', primaryColor: '#6366f1', backgroundColor: '#1f2937' },
-        ]
+            { id: 'featured1', name: 'Varsayılan', background: DEFAULT_THEME_BG, primaryColor: '#6366f1' },
+        ],
+    },
+    {
+        id: 'double',
+        name: '🌈 Çift renkler',
+        themes: DOUBLE_COLOR_THEMES,
     },
     {
         id: 'festival',
@@ -243,6 +293,21 @@ const THEME_CATEGORIES: ThemeCategory[] = [
             { id: 'reading', name: 'Okuma', background: `${CF_IMG}/bdd4bfe0-8d52-4019-9299-cb80204ad300/soruyorum`, primaryColor: '#6366f1' },
         ]
     },
+    {
+        id: 'solid',
+        name: '🔵 Düz Renkler',
+        themes: [
+            { id: 'red', name: 'Kırmızı', backgroundColor: '#dc2626', primaryColor: '#dc2626' },
+            { id: 'blue', name: 'Mavi', backgroundColor: '#2563eb', primaryColor: '#2563eb' },
+            { id: 'green', name: 'Yeşil', backgroundColor: '#16a34a', primaryColor: '#16a34a' },
+            { id: 'purple', name: 'Mor', backgroundColor: '#9333ea', primaryColor: '#9333ea' },
+            { id: 'orange', name: 'Turuncu', backgroundColor: '#ea580c', primaryColor: '#ea580c' },
+            { id: 'pink', name: 'Pembe', backgroundColor: '#ec4899', primaryColor: '#ec4899' },
+            { id: 'cyan', name: 'Turkuaz', backgroundColor: '#06b6d4', primaryColor: '#06b6d4' },
+            { id: 'indigo', name: 'İndigo', backgroundColor: '#4f46e5', primaryColor: '#4f46e5' },
+            { id: 'black', name: 'Siyah', backgroundColor: '#1f2937', primaryColor: '#1f2937' },
+        ]
+    },
 ];
 
 export default function EventSettingsForm({
@@ -257,16 +322,16 @@ export default function EventSettingsForm({
     const [role, setRole] = useState<string | null>(null);
 
     useEffect(() => {
-        try {
-            const token = localStorage.getItem('auth_token') || localStorage.getItem('token');
-            setRole(getRoleFromToken(token));
-        } catch {
-            setRole(null);
-        }
+        void fetchPortalAuthSession()
+            .then((session) => setRole(session.role))
+            .catch(() => setRole(null));
     }, []);
 
+    const isSuperAdminUser = useMemo(() => hasFullAccessRole(role), [role]);
+
     const [activeTab, setActiveTab] = useState<'flow' | 'info' | 'registration' | 'theme'>('info');
-    const [selectedThemeCategory, setSelectedThemeCategory] = useState('solid');
+    const [selectedThemeCategory, setSelectedThemeCategory] = useState('featured');
+    const [upgradeContactOpen, setUpgradeContactOpen] = useState(false);
 
     const [access, setAccess] = useState<OrganizationAccess | null>(null);
     const [accessLoaded, setAccessLoaded] = useState(false);
@@ -293,15 +358,37 @@ export default function EventSettingsForm({
     }, []);
 
     const canUseBrandingLogos = useMemo(() => {
-        if (isSuperAdminRole(role)) return true;
-        // Default to locked until we know access (defense-in-depth).
+        if (hasFullAccessRole(role)) return true;
         if (!accessLoaded) return false;
         if (!access) return false;
+        // Use plan-based features if available
+        if (access.features) return access.features.branding;
+        // Fallback for older API responses
         const plan = String(access.plan || '').toLowerCase();
         const isPremium = (!access.isFreeOrTrial || access.hasActiveSubscription) && plan !== 'free';
         return Boolean(isPremium);
     }, [access, accessLoaded, role]);
-    
+
+    const canUseAdvancedDesigns = canUseBrandingLogos;
+    const planParticipantLimit = useMemo(() => {
+        const limit = access?.features?.maxParticipants;
+        return typeof limit === 'number' && limit > 0 ? limit : null;
+    }, [access?.features?.maxParticipants]);
+
+    const limitedThemeIds = useMemo(() => {
+        return new Set<string>(['featured1', ...DOUBLE_COLOR_THEMES.map((theme) => theme.id)]);
+    }, []);
+
+    const visibleThemeCategories = useMemo(() => {
+        if (canUseAdvancedDesigns) return THEME_CATEGORIES;
+        return THEME_CATEGORIES.filter((category) => category.id === 'featured' || category.id === 'double');
+    }, [canUseAdvancedDesigns]);
+
+    useEffect(() => {
+        if (visibleThemeCategories.some((category) => category.id === selectedThemeCategory)) return;
+        setSelectedThemeCategory(visibleThemeCategories[0]?.id || 'featured');
+    }, [selectedThemeCategory, visibleThemeCategories]);
+
     // Tema Özelleştir Modal State
     const [showCustomThemeModal, setShowCustomThemeModal] = useState(false);
     const [customTheme, setCustomTheme] = useState({
@@ -405,62 +492,103 @@ export default function EventSettingsForm({
         }
 
         return {
-        title: '',
-        description: '',
-        eventType: initialTemplate,
-        maxParticipants: 100,
-        settings: {
-            registration: {
-                requirePin: true,
-                requireName: true,
-                requireEmail: false,
-                requirePhone: false,
-                requireAvatar: false,
-                requireId: false,
-                allowAnonymous: false,
-                requireKvkkConsent: true,
+            title: '',
+            description: '',
+            eventType: initialTemplate,
+            maxParticipants: null,
+            settings: {
+                registration: {
+                    requirePin: true,
+                    requireName: true,
+                    requireEmail: false,
+                    requirePhone: false,
+                    requireAvatar: false,
+                    requireId: false,
+                    allowAnonymous: false,
+                    requireKvkkConsent: true,
+                },
+                gameplay: {
+                    autoMarkNumbers: false,
+                    autoStartEvent: false,
+                    showHostInfo: false,
+                    canHostReset: false,
+                    stepManager: 'admin',
+                    adminCanManage: false,
+                    moderatorCanManage: true,
+                },
+                difficulty: {
+                    level: 'medium',
+                    timeLimit: 30,
+                    showHints: false,
+                },
+                avatar: {
+                    enabled: true,
+                    style: 'emoji',
+                    allowCustom: true,
+                },
+                rewards: {
+                    enabled: true,
+                    showLeaderboard: true,
+                    pointsPerCorrect: 100,
+                    bonusForSpeed: true,
+                },
+                theme: {
+                    primaryColor: '#6366f1',
+                    backgroundColor: '#ffffff',
+                    style: 'default',
+                },
+                wheel: {
+                    enableAccessCodes: false,
+                    requireIdentityNumber: false,
+                    codeCount: 50, // Default
+                },
+                matching: {
+                    levels: normalizeMatchingLevels(defaultMatchingLevels),
+                },
             },
-            gameplay: {
-                autoMarkNumbers: false,
-                autoStartEvent: false,
-                showHostInfo: false,
-                canHostReset: false,
-                stepManager: 'admin',
-                adminCanManage: false,
-                moderatorCanManage: true,
-            },
-            difficulty: {
-                level: 'medium',
-                timeLimit: 30,
-                showHints: false,
-            },
-            avatar: {
-                enabled: true,
-                style: 'emoji',
-                allowCustom: true,
-            },
-            rewards: {
-                enabled: true,
-                showLeaderboard: true,
-                pointsPerCorrect: 100,
-                bonusForSpeed: true,
-            },
-            theme: {
-                primaryColor: '#6366f1',
-                backgroundColor: '#ffffff',
-                style: 'default',
-            },
-            wheel: {
-                enableAccessCodes: false,
-                requireIdentityNumber: false,
-                codeCount: 50, // Default
-            },
-            matching: {
-                levels: normalizeMatchingLevels(defaultMatchingLevels),
-            },
-        },
         };
     });
+
+    useEffect(() => {
+        if (canUseAdvancedDesigns) return;
+        if (showCustomThemeModal) setShowCustomThemeModal(false);
+
+        const currentStyle = String(formData.settings.theme?.style || '').trim();
+        if (!currentStyle || limitedThemeIds.has(currentStyle)) return;
+
+        setFormData((prev) => ({
+            ...prev,
+            settings: {
+                ...prev.settings,
+                theme: {
+                    ...prev.settings.theme,
+                    style: 'featured1',
+                    primaryColor: '#6366f1',
+                    background: undefined,
+                    backgroundImage: DEFAULT_THEME_BG,
+                    backgroundColor: undefined,
+                },
+            },
+        }));
+    }, [canUseAdvancedDesigns, formData.settings.theme?.style, limitedThemeIds, showCustomThemeModal]);
+
+    // Apply plan-based participant limit defaults for regular users.
+    useEffect(() => {
+        if (initialData) return;
+        if (role === null) return;
+
+        if (hasFullAccessRole(role)) {
+            setFormData((prev) => prev.maxParticipants === 5 ? { ...prev, maxParticipants: null } : prev);
+            return;
+        }
+
+        if (!accessLoaded) return;
+
+        setFormData((prev) => ({
+            ...prev,
+            maxParticipants: planParticipantLimit,
+        }));
+    }, [accessLoaded, initialData, planParticipantLimit, role]);
 
     // Auto-generate PIN only for new events (not editing)
     React.useEffect(() => {
@@ -497,7 +625,11 @@ export default function EventSettingsForm({
             return;
         }
 
-        onSave(formData);
+        const normalizedFormData = !isSuperAdminUser && planParticipantLimit
+            ? { ...formData, maxParticipants: planParticipantLimit }
+            : formData;
+
+        onSave(normalizedFormData);
     };
 
     const updateGameplaySetting = (key: keyof typeof formData.settings.gameplay, value: any) => {
@@ -717,12 +849,14 @@ export default function EventSettingsForm({
                                 value={formData.title}
                                 onChange={(e) => setFormData({ ...formData, title: e.target.value })}
                                 placeholder="Etkinlik başlığı (zorunlu)"
-                                className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-indigo-500 outline-none"
+                                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-black placeholder:text-gray-500 focus:ring-2 focus:ring-indigo-500 outline-none"
                             />
                         </div>
 
                         <p className="tab-description">
-                            Katılımcı limitini buradan belirleyebilirsiniz.
+                            {isSuperAdminUser
+                                ? 'Super admin olarak katılımcı limitini değiştirebilirsiniz (isterseniz sınırsız yapabilirsiniz).'
+                                : `Bu pakette katılımcı limiti ${planParticipantLimit ?? 50} kisi olarak uygulanir.`}
                         </p>
                         <p className="tab-note">
                             Değişiklikleri kaydetmek için "Kaydet & Devam Et" butonuna tıklayın.
@@ -735,21 +869,52 @@ export default function EventSettingsForm({
                         {initialTemplate !== 'wheel' && (
                             <div className="form-group">
                                 <label>* Katılımcı Limiti</label>
-                                <input
-                                    type="number"
-                                    value={formData.maxParticipants}
-                                    onChange={(e) =>
-                                        setFormData({
-                                            ...formData,
-                                            maxParticipants: parseInt(e.target.value) || 100,
-                                        })
-                                    }
-                                    min={1}
-                                    max={10000}
-                                />
-                                <p className="field-hint">
-                                    Bu limit, mobil kayıt ekranında katılımcı sayısını sınırlar.
-                                </p>
+                                {isSuperAdminUser ? (
+                                    <>
+                                        <div className="flex items-center gap-3" style={{ marginBottom: 8 }}>
+                                            <label className="flex items-center gap-2 text-sm" style={{ margin: 0 }}>
+                                                <input
+                                                    type="checkbox"
+                                                    checked={formData.maxParticipants === null}
+                                                    onChange={(e) => {
+                                                        const checked = e.target.checked;
+                                                        setFormData({
+                                                            ...formData,
+                                                            maxParticipants: checked ? null : 100,
+                                                        });
+                                                    }}
+                                                />
+                                                Sınırsız
+                                            </label>
+                                        </div>
+                                        <input
+                                            type="number"
+                                            value={formData.maxParticipants ?? ''}
+                                            onChange={(e) => {
+                                                const raw = e.target.value;
+                                                const next = raw === '' ? null : Number(raw);
+                                                setFormData({ ...formData, maxParticipants: next });
+                                            }}
+                                            disabled={formData.maxParticipants === null}
+                                            min={1}
+                                            max={100000}
+                                        />
+                                        <p className="field-hint">
+                                            Sınırsız seçerseniz limit uygulanmaz.
+                                        </p>
+                                    </>
+                                ) : (
+                                    <>
+                                        <input
+                                            type="number"
+                                            value={planParticipantLimit ?? formData.maxParticipants ?? ''}
+                                            disabled
+                                            min={planParticipantLimit ?? 1}
+                                            max={planParticipantLimit ?? 100000}
+                                        />
+                                        <p className="field-hint">Bu limit aktif paketinize gore otomatik uygulanir.</p>
+                                    </>
+                                )}
                             </div>
                         )}
 
@@ -820,7 +985,7 @@ export default function EventSettingsForm({
                                 type="text"
                                 value={formData.eventPin || "Oluşturuluyor..."}
                                 readOnly
-                                className="info-input border border-gray-300 bg-gray-50 text-gray-900 font-bold rounded p-2 w-full font-mono text-lg tracking-wider"
+                                className="info-input border border-gray-300 bg-gray-50 text-black font-bold rounded p-2 w-full font-mono text-lg tracking-wider"
                             />
                             <p className="field-hint mt-1 text-xs">
                                 Bu PIN otomatik oluşturulmuştur ve etkinlik kaydedildiğinde kesinleşecektir.
@@ -834,7 +999,7 @@ export default function EventSettingsForm({
                                 type="text"
                                 value={fixUrl(formData.joinUrl) || "Oluşturuluyor..."}
                                 readOnly
-                                className="info-input border border-gray-300 bg-gray-50 text-gray-700 font-medium rounded p-2 w-full text-sm font-mono"
+                                className="info-input border border-gray-300 bg-gray-50 text-black font-medium rounded p-2 w-full text-sm font-mono"
                             />
                         </div>
 
@@ -985,21 +1150,31 @@ export default function EventSettingsForm({
                         <div className="flex flex-wrap gap-2 mt-4 mb-6">
                             <button
                                 type="button"
-                                onClick={() => setShowCustomThemeModal(true)}
+                                onClick={() => {
+                                    if (!canUseAdvancedDesigns) {
+                                        setUpgradeContactOpen(true);
+                                        return;
+                                    }
+                                    setShowCustomThemeModal(true);
+                                }}
                                 className="px-4 py-2 rounded-full text-sm font-semibold bg-gradient-to-r from-purple-500 to-pink-500 text-white hover:from-purple-600 hover:to-pink-600 transition-all shadow-md"
                             >
                                 ✨ Özel Tema Oluştur
                             </button>
-                            {THEME_CATEGORIES.map((category) => (
+                            {!canUseAdvancedDesigns && (
+                                <span className="inline-flex items-center rounded-full border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-semibold text-amber-800">
+                                    Full branding olmadan sadece Varsayılan ve Çift renkler açık
+                                </span>
+                            )}
+                            {visibleThemeCategories.map((category) => (
                                 <button
                                     key={category.id}
                                     type="button"
                                     onClick={() => setSelectedThemeCategory(category.id)}
-                                    className={`px-4 py-2 rounded-full text-sm font-semibold transition-all ${
-                                        selectedThemeCategory === category.id
-                                            ? 'bg-indigo-600 text-white'
-                                            : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-                                    }`}
+                                    className={`px-4 py-2 rounded-full text-sm font-semibold transition-all ${selectedThemeCategory === category.id
+                                        ? 'bg-indigo-600 text-white'
+                                        : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                                        }`}
                                 >
                                     {category.name}
                                 </button>
@@ -1008,17 +1183,22 @@ export default function EventSettingsForm({
 
                         {/* Tema Grid */}
                         <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
-                            {THEME_CATEGORIES.find(c => c.id === selectedThemeCategory)?.themes.map((theme) => {
+                            {visibleThemeCategories.find(c => c.id === selectedThemeCategory)?.themes.map((theme) => {
                                 const isSelected = formData.settings.theme?.style === theme.id;
                                 const hasBackground = 'background' in theme && theme.background;
-                                
+
                                 return (
                                     <button
                                         key={theme.id}
                                         type="button"
                                         onClick={() => {
+                                            if (!canUseAdvancedDesigns && !limitedThemeIds.has(theme.id)) {
+                                                setUpgradeContactOpen(true);
+                                                return;
+                                            }
                                             const bg = theme.background ?? '';
                                             const isImageBackground = hasBackground && (bg.startsWith('/') || bg.startsWith('http'));
+                                            const isGradientBackground = hasBackground && !isImageBackground;
                                             setFormData(prev => ({
                                                 ...prev,
                                                 settings: {
@@ -1027,19 +1207,17 @@ export default function EventSettingsForm({
                                                         ...prev.settings.theme,
                                                         style: theme.id,
                                                         primaryColor: theme.primaryColor,
-                                                        // Resim yolu ise background olarak, değilse backgroundColor olarak kaydet
-                                                        background: isImageBackground ? theme.background : undefined,
+                                                        background: isGradientBackground ? theme.background : undefined,
                                                         backgroundImage: isImageBackground ? theme.background : undefined,
-                                                        backgroundColor: !isImageBackground ? ((theme as any).backgroundColor || theme.primaryColor) : undefined,
+                                                        backgroundColor: !hasBackground ? ((theme as any).backgroundColor || theme.primaryColor) : undefined,
                                                     },
                                                 },
                                             }));
                                         }}
-                                        className={`relative aspect-video rounded-xl overflow-hidden border-3 transition-all ${
-                                            isSelected
-                                                ? 'border-indigo-500 ring-2 ring-indigo-300 scale-105'
-                                                : 'border-gray-200 hover:border-gray-300 hover:scale-102'
-                                        }`}
+                                        className={`relative aspect-video rounded-xl overflow-hidden border-3 transition-all ${isSelected
+                                            ? 'border-indigo-500 ring-2 ring-indigo-300 scale-105'
+                                            : 'border-gray-200 hover:border-gray-300 hover:scale-102'
+                                            }`}
                                     >
                                         {hasBackground ? (
                                             <div
@@ -1054,14 +1232,14 @@ export default function EventSettingsForm({
                                                 style={{ backgroundColor: (theme as any).backgroundColor || theme.primaryColor }}
                                             />
                                         )}
-                                        
+
                                         {/* Tema adı */}
                                         <div className="absolute bottom-0 left-0 right-0 p-2 bg-gradient-to-t from-black/70 to-transparent">
                                             <span className="text-white text-sm font-semibold drop-shadow-lg">
                                                 {theme.name}
                                             </span>
                                         </div>
-                                        
+
                                         {/* Seçili işareti */}
                                         {isSelected && (
                                             <div className="absolute top-2 right-2 w-6 h-6 bg-indigo-600 rounded-full flex items-center justify-center">
@@ -1074,6 +1252,22 @@ export default function EventSettingsForm({
                                 );
                             })}
                         </div>
+
+                        {!canUseAdvancedDesigns && (
+                            <div className="mt-4 rounded-xl border border-amber-200 bg-amber-50 p-4">
+                                <div className="text-sm font-semibold text-amber-900">Gelismis tasarimlar full branding ozelligi</div>
+                                <div className="mt-1 text-xs text-amber-800">Ozel tema olusturma ve gorsel arka plan yukleme sadece full branding dahil paketlerde aciktir.</div>
+                                <div className="mt-3">
+                                    <button
+                                        type="button"
+                                        onClick={() => setUpgradeContactOpen(true)}
+                                        className="px-3 py-1.5 rounded-lg bg-indigo-600 text-white text-sm hover:bg-indigo-700"
+                                    >
+                                        Paket Yukselt
+                                    </button>
+                                </div>
+                            </div>
+                        )}
 
                         {/* Seçili tema önizleme */}
                         {formData.settings.theme?.style && (
@@ -1094,7 +1288,13 @@ export default function EventSettingsForm({
                                     </div>
                                     <button
                                         type="button"
-                                        onClick={() => setShowCustomThemeModal(true)}
+                                        onClick={() => {
+                                            if (!canUseAdvancedDesigns) {
+                                                setUpgradeContactOpen(true);
+                                                return;
+                                            }
+                                            setShowCustomThemeModal(true);
+                                        }}
                                         className="ml-auto text-sm text-indigo-600 hover:text-indigo-800 font-medium"
                                     >
                                         Özelleştir
@@ -1108,30 +1308,30 @@ export default function EventSettingsForm({
                 {/* ============================================ */}
                 {/* TEMA ÖZELLEŞTİR MODAL */}
                 {/* ============================================ */}
-                {showCustomThemeModal && (
+                {showCustomThemeModal && canUseAdvancedDesigns && (
                     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
                         <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto">
                             <div className="p-6">
                                 <h3 className="text-xl font-bold text-gray-900 mb-6">Tema Özelleştir</h3>
-                                
+
                                 {/* Önizleme */}
-                                <div 
+                                <div
                                     className="relative w-full aspect-video rounded-xl overflow-hidden mb-6 bg-cover bg-center"
-                                    style={{ 
-                                        backgroundImage: customTheme.backgroundImage 
-                                            ? `url(${customTheme.backgroundImage})` 
-                                            : formData.settings.theme?.backgroundColor?.startsWith('/') 
+                                    style={{
+                                        backgroundImage: customTheme.backgroundImage
+                                            ? `url(${customTheme.backgroundImage})`
+                                            : formData.settings.theme?.backgroundColor?.startsWith('/')
                                                 ? `url(${formData.settings.theme.backgroundColor})`
                                                 : undefined,
-                                        backgroundColor: !customTheme.backgroundImage && !formData.settings.theme?.backgroundColor?.startsWith('/') 
-                                            ? (formData.settings.theme?.backgroundColor || '#6366f1') 
+                                        backgroundColor: !customTheme.backgroundImage && !formData.settings.theme?.backgroundColor?.startsWith('/')
+                                            ? (formData.settings.theme?.backgroundColor || '#6366f1')
                                             : undefined,
                                     }}
                                 >
                                     {customTheme.logoUrl && (
-                                        <img 
-                                            src={customTheme.logoUrl} 
-                                            alt="Logo" 
+                                        <img
+                                            src={customTheme.logoUrl}
+                                            alt="Logo"
                                             className="absolute top-4 left-4 h-12 object-contain"
                                         />
                                     )}
@@ -1204,22 +1404,15 @@ export default function EventSettingsForm({
                                             </label>
                                         ) : (
                                             <div className="flex-1 rounded-xl border border-gray-200 bg-gray-50 p-3">
-                                                <div className="text-sm font-semibold text-gray-800">Logo ekleme Pro özelliği</div>
-                                                <div className="text-xs text-gray-600 mt-1">Free planda logo yükleyemezsiniz. (Mevcut logoyu kaldırabilirsiniz.)</div>
+                                                <div className="text-sm font-semibold text-gray-800">Logo ekleme full branding ozelligi</div>
+                                                <div className="text-xs text-gray-600 mt-1">Sadece full branding dahil paketlerde logo yukleyebilirsiniz. (Mevcut logoyu kaldirabilirsiniz.)</div>
                                                 <div className="mt-2 flex flex-wrap gap-2">
                                                     <button
                                                         type="button"
-                                                        onClick={() => router.push('/plans')}
-                                                        className="px-3 py-1.5 rounded-lg border border-gray-200 bg-white text-sm text-gray-700 hover:bg-gray-50"
-                                                    >
-                                                        Planları Gör
-                                                    </button>
-                                                    <button
-                                                        type="button"
-                                                        onClick={() => router.push('/dashboard/billing')}
+                                                        onClick={() => setUpgradeContactOpen(true)}
                                                         className="px-3 py-1.5 rounded-lg bg-indigo-600 text-white text-sm hover:bg-indigo-700"
                                                     >
-                                                        Pro’ya Geç
+                                                        Paket Yukselt
                                                     </button>
                                                 </div>
                                             </div>
@@ -1232,17 +1425,17 @@ export default function EventSettingsForm({
                                     <label className="block text-sm font-semibold text-gray-700 mb-2">Arka Plan Resmi</label>
                                     <div className="flex items-center gap-3">
                                         {(customTheme.backgroundImage || formData.settings.theme?.backgroundColor?.startsWith('/')) && (
-                                            <img 
-                                                src={customTheme.backgroundImage || formData.settings.theme?.backgroundColor} 
-                                                alt="Arka plan" 
-                                                className="w-16 h-12 object-cover border rounded-lg" 
+                                            <img
+                                                src={customTheme.backgroundImage || formData.settings.theme?.backgroundColor}
+                                                alt="Arka plan"
+                                                className="w-16 h-12 object-cover border rounded-lg"
                                             />
                                         )}
                                         <label className="flex items-center gap-2 text-gray-600 cursor-pointer hover:text-indigo-600">
                                             <span>Özel bir resim ekle</span>
-                                            <input 
-                                                type="file" 
-                                                accept="image/*" 
+                                            <input
+                                                type="file"
+                                                accept="image/*"
                                                 className="hidden"
                                                 onChange={(e) => {
                                                     const file = e.target.files?.[0];
@@ -1319,16 +1512,15 @@ export default function EventSettingsForm({
                                                         },
                                                     }));
                                                 }}
-                                                className={`w-full flex items-center justify-between p-3 rounded-lg border transition-all ${
-                                                    customTheme.colorPalette === palette.id 
-                                                        ? 'border-indigo-500 bg-indigo-50' 
-                                                        : 'border-gray-200 hover:border-gray-300'
-                                                }`}
+                                                className={`w-full flex items-center justify-between p-3 rounded-lg border transition-all ${customTheme.colorPalette === palette.id
+                                                    ? 'border-indigo-500 bg-indigo-50'
+                                                    : 'border-gray-200 hover:border-gray-300'
+                                                    }`}
                                             >
                                                 <span className="text-sm font-medium text-gray-700">{palette.name}</span>
                                                 <div className="flex gap-1">
                                                     {palette.colors.map((color, idx) => (
-                                                        <div 
+                                                        <div
                                                             key={idx}
                                                             className="w-6 h-6 rounded-full"
                                                             style={{ backgroundColor: color }}
@@ -1365,6 +1557,8 @@ export default function EventSettingsForm({
                     </button>
                 </div>
             </form>
+
+            <UpgradeContactModal open={upgradeContactOpen} onClose={() => setUpgradeContactOpen(false)} />
         </div>
     );
 }

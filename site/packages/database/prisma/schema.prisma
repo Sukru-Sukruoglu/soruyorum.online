@@ -125,6 +125,34 @@ model events {
   @@index([status])
 }
 
+model newsletter_subscriptions {
+  id         String   @id
+  email      String   @unique
+  source     String?
+  consent    Boolean  @default(true)
+  ip_address String?
+  user_agent String?
+  created_at DateTime @default(now())
+
+  @@index([created_at])
+}
+
+model contact_submissions {
+  id         String   @id
+  name       String
+  email      String
+  phone      String?
+  subject    String?
+  message    String
+  source     String?
+  ip_address String?
+  user_agent String?
+  created_at DateTime @default(now())
+
+  @@index([created_at])
+  @@index([email])
+}
+
 model organizations {
   id            String          @id
   name          String
@@ -137,8 +165,36 @@ model organizations {
   updated_at    DateTime
   audit_logs    audit_logs[]
   events        events[]
+  organization_domains organization_domains[]
   subscriptions subscriptions[]
   users         users[]
+}
+
+model organization_domains {
+  id                       String        @id
+  organization_id          String
+  hostname                 String        @unique
+  type                     String
+  status                   String        @default("pending_dns")
+  is_primary               Boolean       @default(false)
+  verification_method      String?
+  verification_token       String?
+  verification_record_name String?
+  verification_record_type String?
+  cname_target             String?
+  provider_ref             String?
+  provider_status          String?
+  provider_data            Json?
+  ssl_status               String?
+  last_checked_at          DateTime?
+  verified_at              DateTime?
+  created_at               DateTime      @default(now())
+  updated_at               DateTime
+  organizations            organizations @relation(fields: [organization_id], references: [id], onDelete: Cascade)
+
+  @@index([organization_id])
+  @@index([organization_id, status])
+  @@index([organization_id, is_primary])
 }
 
 model participants {
@@ -291,7 +347,16 @@ model users {
   two_factor_enabled  Boolean        @default(false)
   two_factor_secret   String?
   audit_logs          audit_logs[]
+  app_settings        app_settings[]
   events              events[]
   sessions            sessions[]
   organizations       organizations? @relation(fields: [organization_id], references: [id])
+}
+
+model app_settings {
+  key        String   @id
+  value      Json
+  updated_at DateTime @updatedAt
+  updated_by String?
+  users      users?   @relation(fields: [updated_by], references: [id])
 }

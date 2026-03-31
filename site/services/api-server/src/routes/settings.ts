@@ -2,6 +2,7 @@ import express from 'express';
 import bcrypt from 'bcrypt';
 import { tenantDb } from '../database/tenantDb';
 import { authenticateToken } from '../middleware/auth';
+import { isSuperAdmin } from '../utils/access';
 
 const router = express.Router();
 const BCRYPT_ROUNDS = parseInt(process.env.BCRYPT_ROUNDS || '10');
@@ -21,6 +22,7 @@ router.get('/', authenticateToken, async (req, res, next) => {
                 id: true,
                 email: true,
                 name: true,
+                role: true,
                 company: true,
                 timezone: true,
                 email_notifications: true,
@@ -39,7 +41,14 @@ router.get('/', authenticateToken, async (req, res, next) => {
             return res.status(404).json({ error: 'Kullanıcı bulunamadı' });
         }
 
-        res.json(user);
+        const effectiveRole = isSuperAdmin({ role: user.role, email: user.email })
+            ? 'superadmin'
+            : user.role;
+
+        res.json({
+            ...user,
+            role: effectiveRole,
+        });
     } catch (error) {
         next(error);
     }

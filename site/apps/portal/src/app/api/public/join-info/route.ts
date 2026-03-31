@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { copyForwardedContextHeaders } from '../../_lib/forwardProxyHeaders';
 
 const API_URL = process.env.API_URL || 'http://localhost:4000';
 
@@ -8,7 +9,12 @@ export async function GET(request: NextRequest) {
         if (!pin) return NextResponse.json({ error: 'PIN gerekli' }, { status: 400 });
 
         // Forward to backend REST endpoint
-        const response = await fetch(`${API_URL}/api/public/join-info?pin=${pin}`);
+        const headers = new Headers();
+        copyForwardedContextHeaders(request, headers);
+
+        const response = await fetch(`${API_URL}/api/public/join-info?pin=${pin}`, {
+            headers,
+        });
         const data = await response.json();
 
         return NextResponse.json(data, { status: response.status });

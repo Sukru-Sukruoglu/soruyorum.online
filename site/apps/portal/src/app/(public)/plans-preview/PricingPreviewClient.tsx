@@ -49,6 +49,49 @@ function parsePriceTL(raw: string): number {
     return Number.isNaN(parsed) ? 0 : parsed;
 }
 
+function normalizeText(value: string): string {
+    return value
+        .toLocaleLowerCase("tr-TR")
+        .replaceAll("ı", "i")
+        .replaceAll("ş", "s")
+        .replaceAll("ç", "c")
+        .replaceAll("ğ", "g")
+        .replaceAll("ö", "o")
+        .replaceAll("ü", "u");
+}
+
+function resolvePackageId(card: PricingCard): string | null {
+    if (card.packageId && card.packageId.trim().length > 0) {
+        return card.packageId.trim();
+    }
+
+    const title = normalizeText(card.title || "");
+    const support = normalizeText(card.support || "");
+    const price = parsePriceTL(card.price || "");
+    const isEventPack = title.includes("event pack");
+    const isWhiteLabel = title.includes("wl") || title.includes("ozel marka");
+    const is5Event = support.includes("5 event");
+    const is10Event = support.includes("10 event");
+
+    if (isEventPack && !isWhiteLabel && (is5Event || price === 18000)) {
+        return "event-pack-5";
+    }
+
+    if (isEventPack && !isWhiteLabel && (is10Event || price === 32000)) {
+        return "event-pack-10";
+    }
+
+    if (isEventPack && isWhiteLabel && (is5Event || price === 40000)) {
+        return "event-pack-wl-5";
+    }
+
+    if (isEventPack && isWhiteLabel && (is10Event || price === 70000)) {
+        return "event-pack-wl-10";
+    }
+
+    return null;
+}
+
 const defaultPricingCards: PricingCard[] = [
     {
         title: "EVENT PASS",
@@ -205,6 +248,7 @@ const defaultMultiEventPricingCards: PricingCard[] = [
             "Özel subdomain / domain dahil değil",
         ],
         cta: "Standart Teklif Al",
+        packageId: "event-pack-5",
     },
     {
         title: "Event Pack",
@@ -223,6 +267,7 @@ const defaultMultiEventPricingCards: PricingCard[] = [
             "Özel subdomain / domain dahil değil",
         ],
         cta: "Standart Teklif Al",
+        packageId: "event-pack-10",
         active: true,
     },
     {
@@ -241,6 +286,7 @@ const defaultMultiEventPricingCards: PricingCard[] = [
         ],
         mutedFeatures: [],
         cta: "WL Teklif Al",
+        packageId: "event-pack-wl-5",
     },
     {
         title: "Event Pack WL",
@@ -258,6 +304,7 @@ const defaultMultiEventPricingCards: PricingCard[] = [
         ],
         mutedFeatures: [],
         cta: "WL Teklif Al",
+        packageId: "event-pack-wl-10",
     },
 ];
 
@@ -385,13 +432,15 @@ export default function PricingPreviewClient({ initialNavUser }: PricingPreviewC
     };
 
     const proceedToCheckout = () => {
-        if (!selectedCard?.packageId) {
+        const resolvedPackageId = selectedCard ? resolvePackageId(selectedCard) : null;
+
+        if (!resolvedPackageId || !selectedCard) {
             router.push("/dashboard/billing");
             return;
         }
 
         let nextCart = setPackageLine(createEmptyCart(), {
-            productId: selectedCard.packageId,
+            productId: resolvedPackageId,
             title: selectedCard.title,
             description: selectedCard.support,
             features: selectedCard.features,

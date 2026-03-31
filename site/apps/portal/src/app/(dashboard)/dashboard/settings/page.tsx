@@ -1,41 +1,301 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { Settings, User, Bell, Shield, Palette, Globe, Save, Moon, Sun, Check } from "lucide-react";
+import { useSearchParams } from "next/navigation";
+import { Settings, User, Bell, Shield, Palette, Globe, Save, Moon, Sun, Check, CreditCard } from "lucide-react";
 import { trpc } from "@/utils/trpc";
+import { applyDashboardPreferences, readStoredDashboardFontSize, readStoredDashboardTheme, type DashboardFontSize, type DashboardTheme } from "@/utils/dashboardPreferences";
+import { DomainSettingsPanel } from "@/components/settings/DomainSettingsPanel";
 
-type TabType = "profil" | "bildirimler" | "guvenlik" | "gorunum" | "dil";
+type TabType = "profil" | "abonelik" | "domainler" | "bildirimler" | "guvenlik" | "gorunum" | "dil";
+
+const SETTINGS_TABS: TabType[] = ["profil", "abonelik", "domainler", "bildirimler", "guvenlik", "gorunum", "dil"];
 
 export default function SettingsPage() {
-    const [activeTab, setActiveTab] = useState<TabType>("profil");
+    const searchParams = useSearchParams();
+    const initialTab = searchParams.get("tab");
+    const [activeTab, setActiveTab] = useState<TabType>(
+        SETTINGS_TABS.includes(initialTab as TabType) ? (initialTab as TabType) : "profil"
+    );
+
+    useEffect(() => {
+        const nextTab = searchParams.get("tab");
+        if (SETTINGS_TABS.includes(nextTab as TabType)) {
+            setActiveTab(nextTab as TabType);
+        }
+    }, [searchParams]);
 
     return (
-        <div className="p-8 min-h-screen bg-gray-50 dark:bg-gray-900 transition-colors">
-            <h1 className="text-3xl font-bold text-gray-900 dark:text-white mb-8 flex items-center gap-3">
-                <Settings className="text-red-500" />
-                Ayarlar
-            </h1>
+        <div className="min-h-screen bg-gray-50 p-6 transition-colors dark:bg-gray-900 sm:p-8">
+            <div className="w-full max-w-[1480px]">
+                <h1 className="mb-8 flex items-center gap-3 text-3xl font-bold text-gray-900 dark:text-white">
+                    <Settings className="text-red-500" />
+                    Ayarlar
+                </h1>
 
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+                <div className="grid grid-cols-1 gap-6 lg:grid-cols-[240px_minmax(0,1fr)] xl:grid-cols-[260px_minmax(0,1fr)] xl:gap-8">
                 {/* Left: Navigation */}
-                <div className="space-y-2">
-                    <SettingsNavItem icon={User} label="Profil" active={activeTab === "profil"} onClick={() => setActiveTab("profil")} />
-                    <SettingsNavItem icon={Bell} label="Bildirimler" active={activeTab === "bildirimler"} onClick={() => setActiveTab("bildirimler")} />
-                    <SettingsNavItem icon={Shield} label="Güvenlik" active={activeTab === "guvenlik"} onClick={() => setActiveTab("guvenlik")} />
-                    <SettingsNavItem icon={Palette} label="Görünüm" active={activeTab === "gorunum"} onClick={() => setActiveTab("gorunum")} />
-                    <SettingsNavItem icon={Globe} label="Dil ve Bölge" active={activeTab === "dil"} onClick={() => setActiveTab("dil")} />
-                </div>
+                    <div className="space-y-2 lg:sticky lg:top-6 lg:self-start">
+                        <SettingsNavItem icon={User} label="Profil" active={activeTab === "profil"} onClick={() => setActiveTab("profil")} />
+                        <SettingsNavItem icon={CreditCard} label="Abonelik" active={activeTab === "abonelik"} onClick={() => setActiveTab("abonelik")} />
+                        <SettingsNavItem icon={Globe} label="Domainler" active={activeTab === "domainler"} onClick={() => setActiveTab("domainler")} />
+                        <SettingsNavItem icon={Bell} label="Bildirimler" active={activeTab === "bildirimler"} onClick={() => setActiveTab("bildirimler")} />
+                        <SettingsNavItem icon={Shield} label="Güvenlik" active={activeTab === "guvenlik"} onClick={() => setActiveTab("guvenlik")} />
+                        <SettingsNavItem icon={Palette} label="Görünüm" active={activeTab === "gorunum"} onClick={() => setActiveTab("gorunum")} />
+                        <SettingsNavItem icon={Globe} label="Dil ve Bölge" active={activeTab === "dil"} onClick={() => setActiveTab("dil")} />
+                    </div>
 
-                {/* Right: Content */}
-                <div className="lg:col-span-2 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-2xl p-8 shadow-sm transition-colors">
-                    {activeTab === "profil" && <ProfilContent />}
-                    {activeTab === "bildirimler" && <BildirimlerContent />}
-                    {activeTab === "guvenlik" && <GuvenlikContent />}
-                    {activeTab === "gorunum" && <GorunumContent />}
-                    {activeTab === "dil" && <DilContent />}
+                    {/* Right: Content */}
+                    <div className="min-w-0 rounded-2xl border border-gray-200 bg-white p-6 shadow-sm transition-colors dark:border-gray-700 dark:bg-gray-800 sm:p-8">
+                        {activeTab === "profil" && <ProfilContent />}
+                        {activeTab === "abonelik" && <AbonelikContent />}
+                        {activeTab === "domainler" && <DomainSettingsPanel />}
+                        {activeTab === "bildirimler" && <BildirimlerContent />}
+                        {activeTab === "guvenlik" && <GuvenlikContent />}
+                        {activeTab === "gorunum" && <GorunumContent />}
+                        {activeTab === "dil" && <DilContent />}
+                    </div>
                 </div>
             </div>
         </div>
+    );
+}
+
+function AbonelikContent() {
+    const meQuery = trpc.users.me.useQuery();
+    const updateBillingProfile = trpc.users.updateBillingProfile.useMutation();
+    const meData = meQuery.data as any;
+
+    const [didInit, setDidInit] = useState(false);
+    const [legalName, setLegalName] = useState("");
+    const [taxOffice, setTaxOffice] = useState("");
+    const [taxNumber, setTaxNumber] = useState("");
+    const [billingEmail, setBillingEmail] = useState("");
+    const [billingPhone, setBillingPhone] = useState("");
+    const [addressLine, setAddressLine] = useState("");
+    const [city, setCity] = useState("");
+    const [country, setCountry] = useState("Türkiye");
+    const [status, setStatus] = useState<{ type: "success" | "error"; message: string } | null>(null);
+
+    useEffect(() => {
+        if (!meQuery.data || didInit) return;
+        const profile = (meQuery.data.billingProfile ?? {}) as Record<string, string | null | undefined>;
+        setLegalName(profile.legalName ?? meQuery.data.organizations?.name ?? "");
+        setTaxOffice(profile.taxOffice ?? "");
+        setTaxNumber(profile.taxNumber ?? "");
+        setBillingEmail(profile.billingEmail ?? meQuery.data.email ?? "");
+        setBillingPhone(profile.billingPhone ?? meQuery.data.phone ?? "");
+        setAddressLine(profile.addressLine ?? "");
+        setCity(profile.city ?? "");
+        setCountry(profile.country ?? "Türkiye");
+        setDidInit(true);
+    }, [meQuery.data, didInit]);
+
+    const handleSave = async () => {
+        setStatus(null);
+        try {
+            await updateBillingProfile.mutateAsync({
+                legalName: legalName.trim() || undefined,
+                taxOffice: taxOffice.trim() || undefined,
+                taxNumber: taxNumber.trim() || undefined,
+                billingEmail: billingEmail.trim() || undefined,
+                billingPhone: billingPhone.trim() || undefined,
+                addressLine: addressLine.trim() || undefined,
+                city: city.trim() || undefined,
+                country: country.trim() || undefined,
+            });
+            setStatus({ type: "success", message: "Abonelik ve fatura bilgileri kaydedildi" });
+            await meQuery.refetch();
+        } catch (e: any) {
+            setStatus({ type: "error", message: e?.message || "Kaydedilemedi" });
+        }
+    };
+
+    const access = meData?.accessSummary;
+    const subscription = meData?.subscription;
+    const subscriptionHistory = meData?.subscriptionHistory ?? [];
+
+    return (
+        <>
+            <h2 className="text-xl font-bold text-gray-900 dark:text-white mb-6">Abonelik ve Faturalandırma</h2>
+            <div className="space-y-6">
+                {meQuery.isLoading && (
+                    <div className="text-sm text-gray-500 dark:text-gray-400">Abonelik bilgileri yükleniyor…</div>
+                )}
+                {status && (
+                    <div className={status.type === "success" ? "text-sm text-green-600" : "text-sm text-red-600"}>
+                        {status.message}
+                    </div>
+                )}
+
+                <div className="rounded-2xl border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900/40 p-5 space-y-4">
+                    <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+                        <div>
+                            <div className="text-sm font-semibold text-gray-500 dark:text-gray-400">Mevcut Paket</div>
+                            <div className="mt-1 text-2xl font-bold text-gray-900 dark:text-white">{formatPlanLabel(access?.plan)}</div>
+                            <div className="mt-2 text-sm text-gray-600 dark:text-gray-300">
+                                {access?.hasActiveSubscription
+                                    ? "Aktif abonelik bulunuyor."
+                                    : access?.isTrialActive
+                                        ? `Deneme süresi aktif. Bitiş: ${formatDate(access.trialEndsAt)}`
+                                        : "Aktif ücretli abonelik bulunmuyor."}
+                            </div>
+                        </div>
+
+                        <a
+                            href="/dashboard/billing"
+                            className="inline-flex items-center justify-center rounded-lg bg-gradient-to-r from-red-500 to-red-600 px-5 py-3 text-sm font-semibold text-white shadow-lg shadow-red-500/20 hover:opacity-90"
+                        >
+                            Paket / Ödeme Yönet
+                        </a>
+                    </div>
+
+                    <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+                        <InfoChip label="Durum" value={access?.hasActiveSubscription ? "Aktif" : access?.isTrialActive ? "Deneme" : "Pasif"} />
+                        <InfoChip label="Ödeme Yöntemi" value={subscription?.payment_method || "-"} />
+                        <InfoChip label="Dönem Sonu" value={formatDate(subscription?.current_period_end)} />
+                    </div>
+
+                    <div className="rounded-xl border border-blue-200/60 bg-blue-50/70 px-4 py-3 text-sm text-blue-900 dark:border-blue-900/40 dark:bg-blue-950/20 dark:text-blue-100">
+                        Kayıt ekranında sadece temel üyelik bilgileri alınır. Şirket ve fatura detaylarını bu ekrandan daha sonra düzenleyebilirsiniz.
+                    </div>
+                </div>
+
+                <div className="rounded-2xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900/30 p-5 space-y-4">
+                    <div className="flex flex-col gap-1">
+                        <h3 className="text-lg font-semibold text-gray-900 dark:text-white">Ödeme Geçmişi</h3>
+                        <p className="text-sm text-gray-500 dark:text-gray-400">
+                            Son abonelik ve ödeme kayıtlarınız burada görünür. İndirilebilir e-fatura bağlantıları hazır olduğunda bu alana eklenecek.
+                        </p>
+                    </div>
+
+                    {subscriptionHistory.length === 0 ? (
+                        <div className="rounded-xl border border-dashed border-gray-300 dark:border-gray-700 px-4 py-5 text-sm text-gray-500 dark:text-gray-400">
+                            Henüz ödeme kaydı bulunmuyor.
+                        </div>
+                    ) : (
+                        <div className="space-y-3">
+                            {subscriptionHistory.map((item: any) => (
+                                <div
+                                    key={item.id}
+                                    className="grid grid-cols-1 gap-3 rounded-xl border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/60 px-4 py-4 md:grid-cols-[minmax(0,1.2fr)_auto_auto_auto] md:items-center"
+                                >
+                                    <div>
+                                        <div className="text-sm font-semibold text-gray-900 dark:text-white">
+                                            {item.package_name || formatPlanLabel(item.plan)}
+                                        </div>
+                                        <div className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                                            Sipariş tarihi: {formatDate(item.created_at)}
+                                        </div>
+                                        <div className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                                            Dönem: {formatDate(item.current_period_start)} - {formatDate(item.current_period_end)}
+                                        </div>
+                                    </div>
+
+                                    <div className="text-sm font-semibold text-gray-900 dark:text-white">
+                                        {formatMoney(item.amount, item.currency)}
+                                    </div>
+
+                                    <div>
+                                        <StatusChip value={formatSubscriptionStatus(item.status)} tone={getSubscriptionStatusTone(item.status)} />
+                                    </div>
+
+                                    <div className="text-xs text-gray-500 dark:text-gray-400 md:text-right">
+                                        {formatPaymentMethod(item.payment_method)}
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                    )}
+                </div>
+
+                <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
+                    <div>
+                        <label className="block text-sm text-gray-600 dark:text-gray-300 mb-2 font-medium">Fatura Ünvanı / Şirket Adı</label>
+                        <input
+                            type="text"
+                            value={legalName}
+                            onChange={(e) => setLegalName(e.target.value)}
+                            className="w-full px-4 py-3 bg-gray-50 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg text-gray-900 dark:text-white focus:border-red-500 focus:ring-2 focus:ring-red-500/20 outline-none"
+                        />
+                    </div>
+                    <div>
+                        <label className="block text-sm text-gray-600 dark:text-gray-300 mb-2 font-medium">Vergi Dairesi</label>
+                        <input
+                            type="text"
+                            value={taxOffice}
+                            onChange={(e) => setTaxOffice(e.target.value)}
+                            className="w-full px-4 py-3 bg-gray-50 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg text-gray-900 dark:text-white focus:border-red-500 focus:ring-2 focus:ring-red-500/20 outline-none"
+                        />
+                    </div>
+                    <div>
+                        <label className="block text-sm text-gray-600 dark:text-gray-300 mb-2 font-medium">Vergi No / TCKN</label>
+                        <input
+                            type="text"
+                            value={taxNumber}
+                            onChange={(e) => setTaxNumber(e.target.value)}
+                            className="w-full px-4 py-3 bg-gray-50 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg text-gray-900 dark:text-white focus:border-red-500 focus:ring-2 focus:ring-red-500/20 outline-none"
+                        />
+                    </div>
+                    <div>
+                        <label className="block text-sm text-gray-600 dark:text-gray-300 mb-2 font-medium">Fatura E-postası</label>
+                        <input
+                            type="email"
+                            value={billingEmail}
+                            onChange={(e) => setBillingEmail(e.target.value)}
+                            className="w-full px-4 py-3 bg-gray-50 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg text-gray-900 dark:text-white focus:border-red-500 focus:ring-2 focus:ring-red-500/20 outline-none"
+                        />
+                    </div>
+                    <div>
+                        <label className="block text-sm text-gray-600 dark:text-gray-300 mb-2 font-medium">Fatura Telefonu</label>
+                        <input
+                            type="tel"
+                            value={billingPhone}
+                            onChange={(e) => setBillingPhone(e.target.value)}
+                            className="w-full px-4 py-3 bg-gray-50 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg text-gray-900 dark:text-white focus:border-red-500 focus:ring-2 focus:ring-red-500/20 outline-none"
+                        />
+                    </div>
+                    <div>
+                        <label className="block text-sm text-gray-600 dark:text-gray-300 mb-2 font-medium">Ülke</label>
+                        <input
+                            type="text"
+                            value={country}
+                            onChange={(e) => setCountry(e.target.value)}
+                            className="w-full px-4 py-3 bg-gray-50 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg text-gray-900 dark:text-white focus:border-red-500 focus:ring-2 focus:ring-red-500/20 outline-none"
+                        />
+                    </div>
+                </div>
+
+                <div>
+                    <label className="block text-sm text-gray-600 dark:text-gray-300 mb-2 font-medium">Adres</label>
+                    <textarea
+                        value={addressLine}
+                        onChange={(e) => setAddressLine(e.target.value)}
+                        rows={4}
+                        className="w-full px-4 py-3 bg-gray-50 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg text-gray-900 dark:text-white focus:border-red-500 focus:ring-2 focus:ring-red-500/20 outline-none"
+                    />
+                </div>
+
+                <div>
+                    <label className="block text-sm text-gray-600 dark:text-gray-300 mb-2 font-medium">İl / Şehir</label>
+                    <input
+                        type="text"
+                        value={city}
+                        onChange={(e) => setCity(e.target.value)}
+                        className="w-full px-4 py-3 bg-gray-50 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg text-gray-900 dark:text-white focus:border-red-500 focus:ring-2 focus:ring-red-500/20 outline-none"
+                    />
+                </div>
+
+                <button
+                    onClick={handleSave}
+                    disabled={updateBillingProfile.isLoading || meQuery.isLoading}
+                    className="flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-red-500 to-red-600 text-white rounded-lg hover:opacity-90 transition-all shadow-lg shadow-red-500/20 disabled:opacity-60"
+                >
+                    <Save size={18} />
+                    Bilgileri Kaydet
+                </button>
+            </div>
+        </>
     );
 }
 
@@ -350,14 +610,15 @@ function BildirimlerContent() {
     const [pushNotif, setPushNotif] = useState(false);
     const [smsNotif, setSmsNotif] = useState(false);
     const [status, setStatus] = useState<{ type: "success" | "error"; message: string } | null>(null);
+    const pushNotificationsReady = false;
 
     useEffect(() => {
         if (!meQuery.data || didInit) return;
         setEmailNotif(Boolean(meQuery.data.email_notifications));
-        setPushNotif(Boolean(meQuery.data.push_notifications));
+        setPushNotif(pushNotificationsReady ? Boolean(meQuery.data.push_notifications) : false);
         setSmsNotif(Boolean(meQuery.data.sms_notifications));
         setDidInit(true);
-    }, [meQuery.data, didInit]);
+    }, [meQuery.data, didInit, pushNotificationsReady]);
 
     const hasPhone = Boolean(meQuery.data?.phone && String(meQuery.data.phone).trim().length > 0);
     const canEnableSms = hasPhone && Boolean(meQuery.data?.phone_verified);
@@ -367,7 +628,7 @@ function BildirimlerContent() {
         try {
             await updateNotifications.mutateAsync({
                 emailNotifications: emailNotif,
-                pushNotifications: pushNotif,
+                pushNotifications: pushNotificationsReady ? pushNotif : false,
                 smsNotifications: smsNotif,
             });
             setStatus({ type: "success", message: "Kaydedildi" });
@@ -381,6 +642,9 @@ function BildirimlerContent() {
         <>
             <h2 className="text-xl font-bold text-gray-900 dark:text-white mb-6">Bildirim Ayarları</h2>
             <div className="space-y-6">
+                <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900 dark:border-amber-900/40 dark:bg-amber-950/20 dark:text-amber-100">
+                    Bu bölümdeki tercihler hesaba kaydediliyor. Ancak gerçek gönderim entegrasyonu şu anda yalnızca altyapı hazırlık seviyesinde; özellikle tarayıcı push bildirimleri henüz aktif değil.
+                </div>
                 {meQuery.isLoading && (
                     <div className="text-sm text-gray-500 dark:text-gray-400">Bildirim ayarları yükleniyor…</div>
                 )}
@@ -400,9 +664,10 @@ function BildirimlerContent() {
                 />
                 <ToggleItem 
                     label="Push Bildirimleri" 
-                    description="Tarayıcı üzerinden anlık bildirimler alın"
+                    description="Tarayıcı push altyapısı henüz aktif değil"
                     checked={pushNotif}
                     onChange={setPushNotif}
+                    disabled
                 />
                 <ToggleItem 
                     label="SMS Bildirimleri" 
@@ -539,56 +804,33 @@ function GuvenlikContent() {
 }
 
 function GorunumContent() {
-    const [theme, setTheme] = useState<"light" | "dark" | "system">("light");
-    const [fontSize, setFontSize] = useState<"small" | "medium" | "large">("medium");
+    const [theme, setTheme] = useState<DashboardTheme>("dark");
+    const [fontSize, setFontSize] = useState<DashboardFontSize>("medium");
     const [saved, setSaved] = useState(false);
 
     // Load saved theme on mount
     useEffect(() => {
-        const savedTheme = localStorage.getItem('ks-theme') as "light" | "dark" | "system" | null;
-        const savedFontSize = localStorage.getItem('ks-font-size') as "small" | "medium" | "large" | null;
-        if (savedTheme) {
-            setTheme(savedTheme);
-            applyTheme(savedTheme);
-        }
-        if (savedFontSize) setFontSize(savedFontSize);
+        const savedTheme = readStoredDashboardTheme();
+        const savedFontSize = readStoredDashboardFontSize();
+        setTheme(savedTheme);
+        setFontSize(savedFontSize);
+        applyDashboardPreferences({ theme: savedTheme, fontSize: savedFontSize, persist: false });
     }, []);
 
-    // Apply theme when changed
-    const applyTheme = (newTheme: "light" | "dark" | "system") => {
+    const applyTheme = (newTheme: DashboardTheme) => {
         setTheme(newTheme);
-        
-        const root = document.documentElement;
-        
-        if (newTheme === "dark") {
-            root.classList.add('dark');
-            root.style.setProperty('--bg-primary', '#111827');
-            root.style.setProperty('--bg-secondary', '#1f2937');
-            root.style.setProperty('--text-primary', '#f9fafb');
-            root.style.setProperty('--text-secondary', '#d1d5db');
-        } else if (newTheme === "light") {
-            root.classList.remove('dark');
-            root.style.setProperty('--bg-primary', '#f9fafb');
-            root.style.setProperty('--bg-secondary', '#ffffff');
-            root.style.setProperty('--text-primary', '#111827');
-            root.style.setProperty('--text-secondary', '#4b5563');
-        } else {
-            // System preference
-            const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
-            if (prefersDark) {
-                root.classList.add('dark');
-            } else {
-                root.classList.remove('dark');
-            }
-        }
-        
-        // Save immediately when theme is selected
-        localStorage.setItem('ks-theme', newTheme);
+        applyDashboardPreferences({ theme: newTheme, fontSize, persist: true });
+        setSaved(false);
+    };
+
+    const handleFontSizeChange = (newFontSize: DashboardFontSize) => {
+        setFontSize(newFontSize);
+        applyDashboardPreferences({ theme, fontSize: newFontSize, persist: true });
+        setSaved(false);
     };
 
     const handleSave = () => {
-        localStorage.setItem('ks-theme', theme);
-        localStorage.setItem('ks-font-size', fontSize);
+        applyDashboardPreferences({ theme, fontSize, persist: true });
         setSaved(true);
         setTimeout(() => setSaved(false), 2000);
     };
@@ -624,7 +866,7 @@ function GorunumContent() {
                     <label className="block text-sm text-gray-600 dark:text-gray-300 mb-2 font-medium">Yazı Tipi Boyutu</label>
                     <select 
                         value={fontSize}
-                        onChange={(e) => setFontSize(e.target.value as "small" | "medium" | "large")}
+                        onChange={(e) => handleFontSizeChange(e.target.value as DashboardFontSize)}
                         className="w-full px-4 py-3 bg-gray-50 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg text-gray-900 dark:text-white focus:border-red-500 focus:ring-2 focus:ring-red-500/20 outline-none"
                     >
                         <option value="small">Küçük</option>
@@ -684,7 +926,7 @@ function DilContent() {
     );
 }
 
-function ToggleItem({ label, description, checked, onChange }: { label: string; description: string; checked: boolean; onChange: (val: boolean) => void }) {
+function ToggleItem({ label, description, checked, onChange, disabled = false }: { label: string; description: string; checked: boolean; onChange: (val: boolean) => void; disabled?: boolean }) {
     return (
         <div className="flex items-center justify-between p-4 bg-gray-50 dark:bg-gray-700 rounded-lg border border-gray-200 dark:border-gray-600">
             <div>
@@ -692,8 +934,13 @@ function ToggleItem({ label, description, checked, onChange }: { label: string; 
                 <p className="text-sm text-gray-500 dark:text-gray-400">{description}</p>
             </div>
             <button
-                onClick={() => onChange(!checked)}
-                className={`relative w-12 h-6 rounded-full transition-colors ${checked ? 'bg-red-500' : 'bg-gray-300 dark:bg-gray-500'}`}
+                type="button"
+                onClick={() => {
+                    if (disabled) return;
+                    onChange(!checked);
+                }}
+                disabled={disabled}
+                className={`relative w-12 h-6 rounded-full transition-colors ${checked ? 'bg-red-500' : 'bg-gray-300 dark:bg-gray-500'} ${disabled ? 'cursor-not-allowed opacity-50' : ''}`}
             >
                 <span className={`absolute top-1 w-4 h-4 bg-white rounded-full transition-transform ${checked ? 'left-7' : 'left-1'}`} />
             </button>
@@ -716,6 +963,114 @@ function ThemeOption({ icon: Icon, label, selected, onClick }: { icon: React.Ele
             {selected && <Check size={16} className="text-red-500" />}
         </button>
     );
+}
+
+function InfoChip({ label, value }: { label: string; value: string }) {
+    return (
+        <div className="rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 px-4 py-3">
+            <div className="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">{label}</div>
+            <div className="mt-1 text-sm font-semibold text-gray-900 dark:text-white">{value}</div>
+        </div>
+    );
+}
+
+function formatDate(value: string | Date | null | undefined) {
+    if (!value) return "-";
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return "-";
+    return date.toLocaleDateString("tr-TR");
+}
+
+function formatMoney(amount: number | null | undefined, currency: string | null | undefined) {
+    if (typeof amount !== "number" || Number.isNaN(amount)) return "Tutar yok";
+    return new Intl.NumberFormat("tr-TR", {
+        style: "currency",
+        currency: currency || "TRY",
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2,
+    }).format(amount / 100);
+}
+
+function formatSubscriptionStatus(status: string | null | undefined) {
+    switch (status) {
+        case "active":
+            return "Aktif";
+        case "pending":
+            return "Bekliyor";
+        case "failed":
+            return "Başarısız";
+        case "trial":
+            return "Deneme";
+        case "cancelled":
+            return "İptal";
+        default:
+            return status || "Bilinmiyor";
+    }
+}
+
+function getSubscriptionStatusTone(status: string | null | undefined) {
+    switch (status) {
+        case "active":
+            return "green" as const;
+        case "pending":
+            return "amber" as const;
+        case "failed":
+        case "cancelled":
+            return "red" as const;
+        default:
+            return "gray" as const;
+    }
+}
+
+function formatPaymentMethod(value: string | null | undefined) {
+    switch (value) {
+        case "paytr":
+            return "PayTR";
+        case "manual":
+            return "Manuel";
+        default:
+            return value || "-";
+    }
+}
+
+function StatusChip({ value, tone }: { value: string; tone: "green" | "amber" | "red" | "gray" }) {
+    const styles = {
+        green: "border-green-200 bg-green-50 text-green-700 dark:border-green-900/40 dark:bg-green-950/20 dark:text-green-200",
+        amber: "border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-900/40 dark:bg-amber-950/20 dark:text-amber-200",
+        red: "border-red-200 bg-red-50 text-red-700 dark:border-red-900/40 dark:bg-red-950/20 dark:text-red-200",
+        gray: "border-gray-200 bg-gray-50 text-gray-700 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-200",
+    };
+
+    return <span className={`inline-flex rounded-full border px-2.5 py-1 text-xs font-semibold ${styles[tone]}`}>{value}</span>;
+}
+
+function formatPlanLabel(plan: string | null | undefined) {
+    switch ((plan ?? "free").toLowerCase()) {
+        case "event_starter":
+            return "Event Starter";
+        case "event_standard":
+            return "Event Standard";
+        case "event_professional":
+            return "Event Professional";
+        case "starter_wl":
+            return "Starter WL";
+        case "standard_wl":
+            return "Standard WL";
+        case "professional_wl":
+            return "Professional WL";
+        case "corporate":
+            return "Corporate";
+        case "corporate_pro":
+            return "Corporate Pro";
+        case "corporate_wl":
+            return "Corporate WL";
+        case "corporate_pro_wl":
+            return "Corporate Pro WL";
+        case "free":
+            return "EVENT PASS";
+        default:
+            return plan || "EVENT PASS";
+    }
 }
 
 function SettingsNavItem({ icon: Icon, label, active = false, onClick }: { icon: React.ElementType; label: string; active?: boolean; onClick?: () => void }) {

@@ -1,19 +1,31 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { applyAuthorizationHeader } from '../../_lib/authCookie';
+import { validateCsrf } from '../../_lib/csrf';
+import { copyForwardedContextHeaders } from '../../_lib/forwardProxyHeaders';
 
 const API_URL = process.env.API_URL || 'http://localhost:4000';
+
+function isGatewayCallbackPath(path: string) {
+    return path === 'paytr/callback' || path === 'paytr/eft/intermediate-callback';
+}
 
 async function handler(req: NextRequest) {
     const url = new URL(req.url);
     const pathMatch = url.pathname.match(/^\/api\/payments\/(.*)$/);
     const path = pathMatch ? pathMatch[1] : '';
+
+    if (!isGatewayCallbackPath(path)) {
+        const csrfFailure = validateCsrf(req);
+        if (csrfFailure) return csrfFailure;
+    }
+
     const targetUrl = `${API_URL}/api/payments/${path}${url.search}`;
 
     const headers: Record<string, string> = {};
 
-    const authHeader = req.headers.get('Authorization');
-    if (authHeader) {
-        headers['Authorization'] = authHeader;
-    }
+    applyAuthorizationHeader(req, headers);
+
+    copyForwardedContextHeaders(req, headers);
 
     try {
         const body = req.method !== 'GET' && req.method !== 'DELETE' ? await req.text() : undefined;

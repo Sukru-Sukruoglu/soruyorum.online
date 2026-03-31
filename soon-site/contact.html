@@ -1,0 +1,319 @@
+<!DOCTYPE html>
+<html lang="tr">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>İletişim - SoruYorum.Online</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: rgba(0, 0, 0, 0.5);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+
+        .modal-container {
+            background: white;
+            border-radius: 16px;
+            max-width: 500px;
+            width: 100%;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+            animation: slideIn 0.3s ease-out;
+            position: relative;
+        }
+
+        @keyframes slideIn {
+            from {
+                opacity: 0;
+                transform: translateY(-20px);
+            }
+
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .modal-header {
+            padding: 30px 30px 20px;
+            border-bottom: 1px solid #f0f0f0;
+            position: relative;
+        }
+
+        .modal-header h2 {
+            font-size: 24px;
+            color: #182941;
+            margin-bottom: 8px;
+            font-weight: 600;
+        }
+
+        .modal-header p {
+            font-size: 14px;
+            color: #666;
+        }
+
+        .close-btn {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            width: 32px;
+            height: 32px;
+            background: transparent;
+            border: none;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 50%;
+            transition: background 0.2s;
+        }
+
+        .close-btn:hover {
+            background: #f0f0f0;
+        }
+
+        .close-btn::before,
+        .close-btn::after {
+            content: '';
+            position: absolute;
+            width: 16px;
+            height: 2px;
+            background: #666;
+        }
+
+        .close-btn::before {
+            transform: rotate(45deg);
+        }
+
+        .close-btn::after {
+            transform: rotate(-45deg);
+        }
+
+        .modal-body {
+            padding: 20px 30px 30px;
+        }
+
+        .contact-item {
+            padding: 16px 20px;
+            border-radius: 12px;
+            margin-bottom: 12px;
+            background: #f8f9fa;
+            display: flex;
+            align-items: flex-start;
+            gap: 15px;
+            transition: all 0.2s;
+        }
+
+        .contact-item:hover {
+            background: #f0f2f5;
+            transform: translateX(4px);
+        }
+
+        .contact-icon {
+            width: 40px;
+            height: 40px;
+            background: #f14911;
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 18px;
+            flex-shrink: 0;
+        }
+
+        .contact-content {
+            flex: 1;
+        }
+
+        .contact-label {
+            font-size: 12px;
+            color: #666;
+            margin-bottom: 4px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            font-weight: 500;
+        }
+
+        .contact-value {
+            font-size: 16px;
+            color: #182941;
+            font-weight: 600;
+            text-decoration: none;
+            display: block;
+        }
+
+        .contact-value:hover {
+            color: #f14911;
+        }
+
+        .contact-value.address {
+            font-weight: 400;
+            line-height: 1.6;
+        }
+
+        .modal-footer {
+            padding: 20px 30px;
+            background: #f8f9fa;
+            border-radius: 0 0 16px 16px;
+            text-align: center;
+        }
+
+        .cta-button {
+            background: #f14911;
+            color: white;
+            border: none;
+            padding: 14px 32px;
+            border-radius: 8px;
+            font-size: 15px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+            text-decoration: none;
+            display: inline-block;
+        }
+
+        .cta-button:hover {
+            background: #d63d0a;
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(241, 73, 17, 0.3);
+        }
+
+        .esc-hint {
+            margin-top: 12px;
+            font-size: 12px;
+            color: #999;
+        }
+
+        @media (max-width: 600px) {
+            .modal-container {
+                margin: 0;
+                border-radius: 12px;
+            }
+
+            .modal-header h2 {
+                font-size: 20px;
+            }
+
+            .modal-header,
+            .modal-body,
+            .modal-footer {
+                padding-left: 20px;
+                padding-right: 20px;
+            }
+
+            .contact-item {
+                padding: 14px 16px;
+            }
+
+            .contact-value {
+                font-size: 15px;
+            }
+        }
+    </style>
+</head>
+
+<body>
+    <div class="modal-container">
+        <div class="modal-header">
+            <button class="close-btn" onclick="closeWindow()" aria-label="Kapat"></button>
+            <h2>İletişim</h2>
+            <p>Yükseltme için bizimle iletişime geçin.</p>
+        </div>
+
+        <div class="modal-body">
+            <!-- Email -->
+            <div class="contact-item">
+                <div class="contact-icon">✉</div>
+                <div class="contact-content">
+                    <div class="contact-label">E-posta</div>
+                    <a href="mailto:info@ksinteraktif.com" class="contact-value">info@ksinteraktif.com</a>
+                </div>
+            </div>
+
+            <!-- Phone 1 -->
+            <div class="contact-item">
+                <div class="contact-icon">📞</div>
+                <div class="contact-content">
+                    <div class="contact-label">Telefon</div>
+                    <a href="tel:+905322268040" class="contact-value">+90 (532) 226-8040</a>
+                </div>
+            </div>
+
+            <!-- Phone 2 -->
+            <div class="contact-item">
+                <div class="contact-icon">📞</div>
+                <div class="contact-content">
+                    <div class="contact-label">Telefon</div>
+                    <a href="tel:+902125033939" class="contact-value">+90 (212) 503-3939</a>
+                </div>
+            </div>
+
+            <!-- Address -->
+            <div class="contact-item">
+                <div class="contact-icon">📍</div>
+                <div class="contact-content">
+                    <div class="contact-label">Adres</div>
+                    <div class="contact-value address">
+                        İstanbul, Kavacık Mh., Fatih Sultan Mehmet Cd.<br>
+                        Tonoğlu Plaza No:3 Kat:4, Beykoz/İstanbul
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="modal-footer">
+            <a href="mailto:info@ksinteraktif.com" class="cta-button">Bilgileri Kopyala</a>
+            <div class="esc-hint">ESC ile kapatabilirsiniz.</div>
+        </div>
+    </div>
+
+    <script>
+        // Kapatma fonksiyonu - önce window.close() dener, çalışmazsa geri döner
+        function closeWindow() {
+            // Önce pencereyi kapatmayı dene
+            window.close();
+
+            // Eğer pencere kapanmadıysa (setTimeout ile kontrol)
+            setTimeout(function () {
+                // Eğer hala açıksa, geri git
+                if (window.history.length > 1) {
+                    window.history.back();
+                } else {
+                    // Hiç geçmiş yoksa ana sayfaya yönlendir
+                    window.location.href = '/';
+                }
+            }, 100);
+        }
+
+        // ESC tuşu ile kapatma
+        document.addEventListener('keydown', function (e) {
+            if (e.key === 'Escape') {
+                closeWindow();
+            }
+        });
+
+        // Arka plana tıklayınca kapatma
+        document.body.addEventListener('click', function (e) {
+            if (e.target === document.body) {
+                closeWindow();
+            }
+        });
+
+        // Modal'a tıklayınca kapanmasın
+        document.querySelector('.modal-container').addEventListener('click', function (e) {
+            e.stopPropagation();
+        });
+    </script>
+</body>
+
+</html>

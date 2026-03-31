@@ -1,0 +1,61 @@
+import { NextRequest, NextResponse } from 'next/server';
+import { applyAuthorizationHeader } from '../../_lib/authCookie';
+import { validateCsrf } from '../../_lib/csrf';
+import { copyForwardedContextHeaders } from '../../_lib/forwardProxyHeaders';
+
+const API_URL = process.env.API_URL || 'http://localhost:4000';
+
+async function handler(req: NextRequest) {
+    const csrfFailure = validateCsrf(req);
+    if (csrfFailure) return csrfFailure;
+
+    const url = new URL(req.url);
+    const pathMatch = url.pathname.match(/^\/api\/tracking\/(.*)$/);
+    const path = pathMatch ? pathMatch[1] : '';
+    const targetUrl = `${API_URL}/api/tracking/${path}${url.search}`;
+
+    const headers: Record<string, string> = {};
+
+    applyAuthorizationHeader(req, headers);
+
+    copyForwardedContextHeaders(req, headers);
+
+    const contentType = req.headers.get('Content-Type');
+    if (contentType) {
+        headers['Content-Type'] = contentType;
+    }
+
+    try {
+        const body = req.method !== 'GET' && req.method !== 'DELETE' ? await req.text() : undefined;
+
+        const response = await fetch(targetUrl, {
+            method: req.method,
+            headers,
+            body,
+        });
+
+        if (response.status === 204) {
+            return new NextResponse(null, { status: 204 });
+        }
+
+        const data = await response.text();
+
+        const nextHeaders: Record<string, string> = {};
+        const responseContentType = response.headers.get('content-type');
+        if (responseContentType) nextHeaders['Content-Type'] = responseContentType;
+
+        return new NextResponse(data, {
+            status: response.status,
+            headers: nextHeaders,
+        });
+    } catch (error) {
+        console.error('Tracking API proxy error:', error);
+        return NextResponse.json({ error: 'API connection failed' }, { status: 500 });
+    }
+}
+
+export const GET = handler;
+export const POST = handler;
+export const PUT = handler;
+export const PATCH = handler;
+export const DELETE = handler;

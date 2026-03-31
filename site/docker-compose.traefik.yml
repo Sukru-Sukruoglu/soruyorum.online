@@ -1,5 +1,26 @@
 # Traefik routing override (prod)
 services:
+  soruyorum-static:
+    networks:
+      - default
+      - infra-network
+    labels:
+      - "traefik.enable=true"
+      - "traefik.docker.network=infra-network"
+      - "traefik.http.middlewares.soruyorum-static-redirect-to-https.redirectscheme.scheme=https"
+      - "traefik.http.middlewares.soruyorum-static-redirect-to-https.redirectscheme.permanent=true"
+      # Static pages only (specific paths)
+      - "traefik.http.routers.soruyorum-static-http.entrypoints=http"
+      - "traefik.http.routers.soruyorum-static-http.rule=Host(`soruyorum.online`) && (Path(`/`) || Path(`/index`) || Path(`/index.html`) || Path(`/contact`) || Path(`/contact.html`) || Path(`/acik-riza`) || Path(`/acik-riza.html`) || Path(`/kvkk`) || Path(`/kvkk.html`) || PathPrefix(`/assets`))"
+      - "traefik.http.routers.soruyorum-static-http.middlewares=soruyorum-static-redirect-to-https"
+      - "traefik.http.routers.soruyorum-static-http.priority=20"
+      - "traefik.http.routers.soruyorum-static-https.entrypoints=https"
+      - "traefik.http.routers.soruyorum-static-https.rule=Host(`soruyorum.online`) && (Path(`/`) || Path(`/index`) || Path(`/index.html`) || Path(`/contact`) || Path(`/contact.html`) || Path(`/acik-riza`) || Path(`/acik-riza.html`) || Path(`/kvkk`) || Path(`/kvkk.html`) || PathPrefix(`/assets`))"
+      - "traefik.http.routers.soruyorum-static-https.tls=true"
+      - "traefik.http.routers.soruyorum-static-https.tls.certresolver=letsencrypt"
+      - "traefik.http.routers.soruyorum-static-https.priority=20"
+      - "traefik.http.services.soruyorum-static.loadbalancer.server.port=80"
+
   soruyorum-portal:
     networks:
       - default
@@ -9,13 +30,33 @@ services:
       - "traefik.docker.network=infra-network"
       - "traefik.http.middlewares.soruyorum-redirect-to-https.redirectscheme.scheme=https"
       - "traefik.http.middlewares.soruyorum-redirect-to-https.redirectscheme.permanent=true"
+      - "traefik.http.middlewares.soruyorum-security.headers.contentTypeNosniff=true"
+      - "traefik.http.middlewares.soruyorum-security.headers.browserXssFilter=true"
+      - "traefik.http.middlewares.soruyorum-security.headers.customResponseHeaders.X-Frame-Options=SAMEORIGIN"
+      - "traefik.http.middlewares.soruyorum-security.headers.referrerPolicy=strict-origin-when-cross-origin"
+      - "traefik.http.middlewares.soruyorum-security.headers.stsSeconds=31536000"
+      - "traefik.http.middlewares.soruyorum-security.headers.stsIncludeSubdomains=true"
+      # Portal handles all other routes on soruyorum.online
       - "traefik.http.routers.soruyorum-http.entrypoints=http"
-      - "traefik.http.routers.soruyorum-http.rule=Host(`soruyorum.online`) || Host(`www.soruyorum.online`) || Host(`mobil.soruyorum.online`) || Host(`ekran.soruyorum.online`) || Host(`tablet.soruyorum.online`)"
+      - "traefik.http.routers.soruyorum-http.rule=Host(`soruyorum.online`) || Host(`www.soruyorum.online`) || Host(`mobil.soruyorum.online`) || Host(`ekran.soruyorum.online`) || Host(`tablet.soruyorum.online`) || Host(`connect.soruyorum.live`) || HostRegexp(`{subdomain:[a-z0-9-]+}.soruyorum.live`)"
       - "traefik.http.routers.soruyorum-http.middlewares=soruyorum-redirect-to-https"
+      - "traefik.http.routers.soruyorum-http.priority=1"
       - "traefik.http.routers.soruyorum-https.entrypoints=https"
-      - "traefik.http.routers.soruyorum-https.rule=Host(`soruyorum.online`) || Host(`www.soruyorum.online`) || Host(`mobil.soruyorum.online`) || Host(`ekran.soruyorum.online`) || Host(`tablet.soruyorum.online`)"
+      - "traefik.http.routers.soruyorum-https.rule=Host(`soruyorum.online`) || Host(`www.soruyorum.online`) || Host(`mobil.soruyorum.online`) || Host(`ekran.soruyorum.online`) || Host(`tablet.soruyorum.online`) || Host(`connect.soruyorum.live`) || HostRegexp(`{subdomain:[a-z0-9-]+}.soruyorum.live`)"
       - "traefik.http.routers.soruyorum-https.tls=true"
       - "traefik.http.routers.soruyorum-https.tls.certresolver=letsencrypt"
+      - "traefik.http.routers.soruyorum-https.priority=1"
+      - "traefik.http.routers.soruyorum-https.middlewares=soruyorum-security"
+      - "traefik.http.routers.soruyorum-custom-http.entrypoints=http"
+      - "traefik.http.routers.soruyorum-custom-http.rule=PathPrefix(`/`)"
+      - "traefik.http.routers.soruyorum-custom-http.middlewares=soruyorum-redirect-to-https"
+      - "traefik.http.routers.soruyorum-custom-http.priority=0"
+      - "traefik.http.routers.soruyorum-custom-http.service=soruyorum"
+      - "traefik.http.routers.soruyorum-custom-https.entrypoints=https"
+      - "traefik.http.routers.soruyorum-custom-https.rule=PathPrefix(`/`)"
+      - "traefik.http.routers.soruyorum-custom-https.tls=true"
+      - "traefik.http.routers.soruyorum-custom-https.priority=0"
+      - "traefik.http.routers.soruyorum-custom-https.service=soruyorum"
       - "traefik.http.services.soruyorum.loadbalancer.server.port=3000"
 
   soruyorum-api-server:
@@ -27,6 +68,7 @@ services:
       - "traefik.docker.network=infra-network"
       - "traefik.http.middlewares.soruyorum-api-redirect-to-https.redirectscheme.scheme=https"
       - "traefik.http.middlewares.soruyorum-api-redirect-to-https.redirectscheme.permanent=true"
+      # api.soruyorum.online subdomain routing
       - "traefik.http.routers.soruyorum-api-http.entrypoints=http"
       - "traefik.http.routers.soruyorum-api-http.rule=Host(`api.soruyorum.online`)"
       - "traefik.http.routers.soruyorum-api-http.middlewares=soruyorum-api-redirect-to-https"

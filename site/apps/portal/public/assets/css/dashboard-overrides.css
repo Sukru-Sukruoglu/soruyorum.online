@@ -1,0 +1,95 @@
+/* Headings always white */
+.page-wrapper h1,
+.page-wrapper h2,
+.page-wrapper h3,
+.page-wrapper h4,
+.page-wrapper h5,
+.page-wrapper h6 {
+    color: #fff !important;
+}
+
+/* Override Tailwind light-theme backgrounds */
+.page-wrapper .bg-white {
+    background-color: rgba(255, 255, 255, 0.05) !important;
+    backdrop-filter: blur(8px);
+}
+
+.page-wrapper .bg-gray-50 {
+    background-color: rgba(255, 255, 255, 0.03) !important;
+}
+
+.page-wrapper .bg-gray-100 {
+    background-color: rgba(255, 255, 255, 0.06) !important;
+}
+
+/* Override Tailwind light-theme text colors */
+.page-wrapper .text-gray-900 {
+    color: #e2e8f0 !important;
+}
+
+.page-wrapper .text-gray-800 {
+    color: #cbd5e1 !important;
+}
+
+.page-wrapper .text-gray-700 {
+    color: #94a3b8 !important;
+}
+
+.page-wrapper .text-gray-600 {
+    color: #94a3b8 !important;
+}
+
+.page-wrapper .text-gray-500 {
+    color: #64748b !important;
+}
+
+/* Override Tailwind light-theme borders */
+.page-wrapper .border-gray-200,
+.page-wrapper .border-gray-100 {
+    border-color: rgba(255, 255, 255, 0.1) !important;
+}
+
+.page-wrapper .border-gray-300 {
+    border-color: rgba(255, 255, 255, 0.15) !important;
+}
+
+/* Divide colors */
+.page-wrapper .divide-gray-200>*+* {
+    border-color: rgba(255, 255, 255, 0.1) !important;
+}
+
+/* Hover states */
+.page-wrapper .hover\:bg-gray-50:hover {
+    background-color: rgba(255, 255, 255, 0.08) !important;
+}
+
+.page-wrapper .hover\:bg-gray-100:hover {
+    background-color: rgba(255, 255, 255, 0.1) !important;
+}
+
+.page-wrapper .hover\:border-gray-300:hover {
+    border-color: rgba(255, 255, 255, 0.2) !important;
+}
+
+/* Form inputs */
+.page-wrapper input,
+.page-wrapper select,
+.page-wrapper textarea {
+    background-color: rgba(255, 255, 255, 0.05) !important;
+    border-color: rgba(255, 255, 255, 0.15) !important;
+    color: #e2e8f0 !important;
+}
+
+.page-wrapper input::placeholder,
+.page-wrapper textarea::placeholder {
+    color: #64748b !important;
+}
+
+/* Table overrides */
+.page-wrapper th {
+    color: #94a3b8 !important;
+}
+
+.page-wrapper td {
+    color: #e2e8f0 !important;
+}

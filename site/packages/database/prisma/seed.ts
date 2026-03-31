@@ -7,21 +7,21 @@ async function main() {
 
     // Create Organization
     const org = await prisma.organizations.upsert({
-        where: { slug: 'ks-interaktif' },
+        where: { slug: 'soruyorum-online' },
         update: {},
         create: {
-            name: 'KS İnteraktif HQ',
-            slug: 'ks-interaktif',
+            name: 'SoruYorum Online HQ',
+            slug: 'soruyorum-online',
             plan: 'enterprise',
         },
     })
 
     // Create Admin User
     const admin = await prisma.users.upsert({
-        where: { email: 'admin@ksinteraktif.com' },
+        where: { email: 'admin@soruyorum.online' },
         update: {},
         create: {
-            email: 'admin@ksinteraktif.com',
+            email: 'admin@soruyorum.online',
             name: 'Super Admin',
             role: 'ADMIN',
             organizationId: org.id,

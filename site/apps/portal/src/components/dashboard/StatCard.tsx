@@ -20,22 +20,22 @@ export function StatCard({ title, value, change, isPositive, icon: Icon, color }
         normalizedChange === "0.0%";
 
     return (
-        <div className="relative group overflow-hidden bg-white p-6 rounded-2xl border border-gray-100 shadow-sm hover:shadow-md transition-all duration-300">
+        <div className="relative group overflow-hidden bg-white/5 backdrop-blur-sm p-6 rounded-2xl border border-white/10 shadow-sm hover:shadow-md hover:border-white/20 transition-all duration-300">
             {/* Hover Gradient Background (Subtle) */}
-            <div className="absolute inset-0 bg-gradient-to-br from-gray-50 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
+            <div className="absolute inset-0 bg-gradient-to-br from-white/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
 
             <div className="relative z-10 flex items-start justify-between">
                 <div>
-                    <p className="text-gray-500 font-medium text-sm mb-1">{title}</p>
-                    <h3 className="text-3xl font-bold text-gray-900 mb-2 tracking-tight">{value}</h3>
+                    <p style={{ color: "#94a3b8" }} className="font-medium text-sm mb-1">{title}</p>
+                    <h3 style={{ color: "#fff" }} className="text-3xl font-bold mb-2 tracking-tight">{value}</h3>
                     {isNeutralChange ? (
                         <p className="text-xs font-semibold flex items-center gap-1 text-gray-500">
-                            — <span className="text-gray-400 font-normal ml-1">değişim yok</span>
+                            — <span className="text-gray-500 font-normal ml-1">değişim yok</span>
                         </p>
                     ) : (
-                        <p className={`text-xs font-semibold flex items-center gap-1 ${isPositive ? "text-green-600" : "text-red-500"}`}>
+                        <p className={`text-xs font-semibold flex items-center gap-1 ${isPositive ? "text-green-400" : "text-red-400"}`}>
                             {isPositive ? "↑" : "↓"} {change}
-                            <span className="text-gray-400 font-normal ml-1">geçen aya göre</span>
+                            <span className="text-gray-500 font-normal ml-1">geçen aya göre</span>
                         </p>
                     )}
                 </div>

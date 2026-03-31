@@ -5,6 +5,21 @@ const SORUYORUM_HOSTS = new Set(["soruyorum.online", "www.soruyorum.online"]);
 const TABLET_HOSTS = new Set(["tablet.soruyorum.online"]);
 const MOBIL_HOSTS = new Set(["mobil.soruyorum.online"]);
 
+const TABLET_BYPASS_PREFIXES = [
+    "/assets",
+    "/login",
+    "/register",
+    "/forgot-password",
+    "/reset-password",
+    "/check-email",
+    "/verify-email",
+    "/kvkk",
+    "/acik-riza",
+    "/api",
+    "/_next",
+    "/favicon.ico",
+];
+
 const BLOCKED_PREFIXES = [
     "/events/new/wordcloud",
     "/events/new/wheeloffortune",
@@ -16,8 +31,31 @@ const BLOCKED_PREFIXES = [
     "/presentation/matching",
 ];
 
+const FRAMEABLE_PREFIXES = ["/join"];
+
+function shouldAllowFraming(pathname: string) {
+    if (FRAMEABLE_PREFIXES.some((prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`))) {
+        return true;
+    }
+
+    return /^\/events\/[^/]+\/live(?:\/|$)/.test(pathname);
+}
+
+function withFrameHeaders(res: NextResponse, pathname: string) {
+    if (shouldAllowFraming(pathname)) {
+        res.headers.delete("x-frame-options");
+        return res;
+    }
+
+    res.headers.set("X-Frame-Options", "SAMEORIGIN");
+    return res;
+}
+
 export function middleware(req: NextRequest) {
-    const host = req.headers.get("host")?.split(":")[0]?.toLowerCase();
+    const forwardedHost = req.headers.get("x-forwarded-host")?.split(",")[0]?.trim();
+    const originalHost = req.headers.get("x-original-host")?.split(",")[0]?.trim();
+    const requestHost = forwardedHost || originalHost || req.headers.get("host") || "";
+    const host = requestHost.split(":")[0]?.toLowerCase();
     const pathname = req.nextUrl.pathname;
 
     // Mobil subdomain: redirect / to /join
@@ -25,33 +63,45 @@ export function middleware(req: NextRequest) {
         if (pathname === "/") {
             const url = req.nextUrl.clone();
             url.pathname = "/join";
-            return NextResponse.redirect(url);
+            return withFrameHeaders(NextResponse.redirect(url), url.pathname);
         }
-        return NextResponse.next();
+        return withFrameHeaders(NextResponse.next(), pathname);
     }
 
     // Host-based tablet UI: map tablet.soruyorum.online/* -> /tablet/*
     if (host && TABLET_HOSTS.has(host)) {
+        if (TABLET_BYPASS_PREFIXES.some((prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`))) {
+            return withFrameHeaders(NextResponse.next(), pathname);
+        }
+
         if (pathname.startsWith("/tablet")) {
-            return NextResponse.next();
+            return withFrameHeaders(NextResponse.next(), pathname);
         }
 
         const url = req.nextUrl.clone();
         url.pathname = pathname === "/" ? "/tablet" : `/tablet${pathname}`;
-        return NextResponse.rewrite(url);
+        return withFrameHeaders(NextResponse.rewrite(url), url.pathname);
     }
 
     if (!host || !SORUYORUM_HOSTS.has(host)) {
-        return NextResponse.next();
+        return withFrameHeaders(NextResponse.next(), pathname);
     }
+
+    // Redirect .html URLs to clean URLs (e.g. /login.html -> /login)
+    if (pathname.endsWith(".html")) {
+        const url = req.nextUrl.clone();
+        url.pathname = pathname.replace(/\.html$/, "");
+        return withFrameHeaders(NextResponse.redirect(url, 301), url.pathname);
+    }
+
     if (BLOCKED_PREFIXES.some((prefix) => pathname.startsWith(prefix))) {
         const url = req.nextUrl.clone();
         url.pathname = "/events/new";
         url.search = "";
-        return NextResponse.redirect(url);
+        return withFrameHeaders(NextResponse.redirect(url), url.pathname);
     }
 
-    return NextResponse.next();
+    return withFrameHeaders(NextResponse.next(), pathname);
 }
 
 export const config = {

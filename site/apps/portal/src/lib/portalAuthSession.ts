@@ -1,5 +1,6 @@
 import { decodeJwtPayload } from "@/utils/auth";
 import type { PortalAuthSession } from "@/utils/authSession";
+import { isSuperAdminRole } from "@/utils/auth";
 
 const API_URL = process.env.API_URL || "http://localhost:4000";
 
@@ -19,13 +20,12 @@ export async function buildPortalAuthSessionFromToken(
   token: string,
 ): Promise<PortalAuthSession> {
   const payload = decodeJwtPayload(token);
-  if (!payload?.exp || payload.exp * 1000 <= Date.now()) {
-    return portalAuthSessionUnauthenticated();
-  }
+  const hasValidJwtPayload = Boolean(payload?.exp && payload.exp * 1000 > Date.now());
 
   let userName: string | null = null;
   let userRole: string | null = null;
   let userEmail: string | null = null;
+  let organizationId: string | null = payload?.organizationId ?? null;
   try {
     const upstream = await fetch(`${API_URL}/api/settings`, {
       method: "GET",
@@ -45,17 +45,38 @@ export async function buildPortalAuthSessionFromToken(
       if (data && typeof data.email === "string" && data.email.trim()) {
         userEmail = data.email.trim();
       }
+      if (data && typeof data.organizationId === "string" && data.organizationId.trim()) {
+        organizationId = data.organizationId.trim();
+      }
+      if (
+        data &&
+        typeof data.organization_id === "string" &&
+        data.organization_id.trim()
+      ) {
+        organizationId = data.organization_id.trim();
+      }
+    } else if (!hasValidJwtPayload) {
+      return portalAuthSessionUnauthenticated();
     }
   } catch (error) {
     console.warn("[portal auth session] failed to fetch user settings", error);
+    if (!hasValidJwtPayload) {
+      return portalAuthSessionUnauthenticated();
+    }
+  }
+
+  if (!hasValidJwtPayload && !organizationId) {
+    return portalAuthSessionUnauthenticated();
   }
 
   return {
-    authenticated: true,
-    role: userRole ?? payload.role ?? null,
-    organizationId: payload.organizationId ?? null,
-    email: userEmail ?? payload.email ?? null,
-    expiresAt: payload.exp ? payload.exp * 1000 : null,
+    authenticated: Boolean(organizationId),
+    role: isSuperAdminRole(payload?.role ?? null)
+      ? payload?.role ?? null
+      : userRole ?? payload?.role ?? null,
+    organizationId,
+    email: userEmail ?? payload?.email ?? null,
+    expiresAt: payload?.exp ? payload.exp * 1000 : null,
     user: {
       name: userName,
     },

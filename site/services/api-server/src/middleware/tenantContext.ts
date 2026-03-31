@@ -1,4 +1,5 @@
 import { Request, Response, NextFunction } from 'express';
+import { lucia } from '@ks-interaktif/auth';
 import { verifyToken } from '../utils/jwt';
 
 export const tenantContextMiddleware = async (
@@ -16,14 +17,30 @@ export const tenantContextMiddleware = async (
         }
 
         const token = authHeader.replace('Bearer ', '');
-        const decoded = verifyToken(token);
+        try {
+            const decoded = verifyToken(token);
 
-        req.organizationId = decoded.organizationId;
-        req.userId = decoded.userId;
-        req.userRole = decoded.role;
-        req.userEmail = decoded.email;
+            req.organizationId = decoded.organizationId;
+            req.userId = decoded.userId;
+            req.userRole = decoded.role;
+            req.userEmail = decoded.email;
 
-        next();
+            next();
+            return;
+        } catch {
+            const result = await lucia.validateSession(token);
+            if (!result.session || !result.user?.organizationId) {
+                throw new Error('Invalid legacy session');
+            }
+
+            req.organizationId = result.user.organizationId;
+            req.userId = result.user.id;
+            req.userRole = result.user.role;
+            req.userEmail = result.user.email;
+
+            next();
+            return;
+        }
     } catch (error) {
         if (req.ip) {
             console.error('[GÜVENLİK] Geçersiz token denemesi:', {

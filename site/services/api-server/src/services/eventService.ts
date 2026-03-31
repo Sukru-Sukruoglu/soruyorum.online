@@ -1,7 +1,9 @@
 import crypto from 'crypto';
 import { randomUUID } from 'crypto';
 import QRCode from 'qrcode';
+import { prisma } from '@ks-interaktif/database';
 import { tenantDb } from '../database/tenantDb';
+import { getOrganizationJoinBaseUrl } from '../utils/domains';
 
 export interface EventSettings {
     registration: {
@@ -42,16 +44,14 @@ export class EventService {
         return pin!;
     }
 
-    static generateJoinUrl(eventId: string, pin: string): string {
-        const baseUrl = (process.env.FRONTEND_URL || 'https://mobil.ksinteraktif.com').replace(/\/+$/, '');
-        const timestamp = Date.now();
-        const hash = crypto
-            .createHash('sha256')
-            .update(`${eventId}-${pin}-${timestamp}`)
-            .digest('hex')
-            .substring(0, 16);
-
-        return `${baseUrl}/join?event=${eventId}&pin=${pin}&hash=${hash}&t=${timestamp}`;
+    static async generateJoinUrl(
+        eventId: string,
+        pin: string,
+        organizationId: string,
+        req?: { headers?: Record<string, unknown> | null } | null
+    ): Promise<string> {
+        const baseUrl = (await getOrganizationJoinBaseUrl(prisma as any, organizationId, req as any)).replace(/\/+$/, '');
+        return `${baseUrl}/join?pin=${pin}`;
     }
 
     static async generateQRCode(joinUrl: string): Promise<string> {
@@ -77,9 +77,10 @@ export class EventService {
         title: string;
         description?: string;
         eventType: string; // 'quiz', 'poll', etc.
-        maxParticipants?: number;
+        maxParticipants?: number | null;
         eventPin?: string;
         settings: EventSettings;
+        req?: { headers?: Record<string, unknown> | null } | null;
     }) {
         const eventPin = data.eventPin || (await this.generateUniquePin(data.organizationId));
         const eventCode = Math.random().toString(36).substring(2, 8).toUpperCase();
@@ -97,14 +98,15 @@ export class EventService {
             event_code: eventCode,
             event_pin: eventPin,
             pin: eventPin, // Sync legacy field
-            max_participants: data.maxParticipants || 100,
+            // Role-based enforcement happens in routes; service persists requested value.
+            max_participants: data.maxParticipants ?? null,
             settings: data.settings as any,
             created_by: data.userId,
             access_type: 'pin',
             updated_at: new Date(),
         });
 
-        const joinUrl = this.generateJoinUrl(tempEvent.id, eventPin);
+        const joinUrl = await this.generateJoinUrl(tempEvent.id, eventPin, data.organizationId, data.req);
         const qrCodeUrl = await this.generateQRCode(joinUrl);
 
         const event = await tenantDb.update<any>(
@@ -119,10 +121,11 @@ export class EventService {
 
     static async regeneratePin(
         eventId: string,
-        organizationId: string
+        organizationId: string,
+        req?: { headers?: Record<string, unknown> | null } | null
     ): Promise<{ pin: string; joinUrl: string; qrCodeUrl: string }> {
         const newPin = await this.generateUniquePin(organizationId);
-        const joinUrl = this.generateJoinUrl(eventId, newPin);
+        const joinUrl = await this.generateJoinUrl(eventId, newPin, organizationId, req);
         const qrCodeUrl = await this.generateQRCode(joinUrl);
 
         await tenantDb.update(

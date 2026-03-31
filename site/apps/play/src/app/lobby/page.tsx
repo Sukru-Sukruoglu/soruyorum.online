@@ -3,8 +3,8 @@
 import { useSearchParams, useRouter } from "next/navigation";
 import { useEffect, useState, Suspense } from "react";
 import { Button } from "@ks-interaktif/ui";
-import { MessageSquare } from "lucide-react";
-import { getSocket } from "../../lib/socket";
+import { MessageSquare, AlertCircle, XCircle } from "lucide-react";
+import { getFreshSocket } from "../../lib/socket";
 
 function LobbyContent() {
     const searchParams = useSearchParams();
@@ -12,16 +12,68 @@ function LobbyContent() {
 
     const name = searchParams.get("name");
     const avatarSeed = searchParams.get("avatar");
+    const pin = searchParams.get("pin");
 
     // Simulate waiting for game start
     const [status, setStatus] = useState("LOBBY");
     const [participantsCount, setParticipantsCount] = useState(0);
+    const [error, setError] = useState<string | null>(null);
+    const [eventEnded, setEventEnded] = useState(false);
+    const [endMessage, setEndMessage] = useState("");
+    const [waitingInfo, setWaitingInfo] = useState<{ position: number; limit: number; eventName: string } | null>(null);
 
     useEffect(() => {
-        const socket = getSocket();
+        if (!pin) {
+            setError("PIN kodu bulunamadı. Lütfen tekrar katılın.");
+            return;
+        }
+
+        // Always get a fresh socket to ensure we're not connected to old events
+        const socket = getFreshSocket();
         socket.connect();
 
-        socket.emit("join_room", { pin: "1234", name, avatar: avatarSeed }); // Using demo PIN for now. Real PIN would come from URL if needed.
+        socket.emit("join_room", { pin, name, avatar: avatarSeed });
+
+        // Success handler
+        socket.on("join_success", (data: any) => {
+            console.log("Joined event:", data.eventName);
+            setWaitingInfo(null);
+        });
+
+        socket.on("waiting_room", (data: any) => {
+            setWaitingInfo({
+                position: Number(data.position || 1),
+                limit: Number(data.limit || 0),
+                eventName: String(data.eventName || "Etkinlik"),
+            });
+        });
+
+        socket.on("waiting_room_update", (data: any) => {
+            setWaitingInfo((prev) => ({
+                position: Number(data.position || prev?.position || 1),
+                limit: Number(data.limit || prev?.limit || 0),
+                eventName: String(data.eventName || prev?.eventName || "Etkinlik"),
+            }));
+        });
+
+        // Error handler - invalid PIN or event not active
+        socket.on("join_error", (data: any) => {
+            console.error("Join error:", data);
+            setError(data.message || "Etkinliğe katılırken bir hata oluştu.");
+        });
+
+        // Kicked handler - PIN changed
+        socket.on("kicked", (data: any) => {
+            console.warn("Kicked from event:", data);
+            setError(data.reason || "Etkinlikten çıkarıldınız.");
+        });
+
+        // Event ended handler
+        socket.on("event_ended", (data: any) => {
+            console.log("Event ended:", data);
+            setEventEnded(true);
+            setEndMessage(data.message || "Etkinlik sona erdi.");
+        });
 
         socket.on("game_state", (data: any) => {
             setStatus(data.status);
@@ -34,10 +86,76 @@ function LobbyContent() {
             setParticipantsCount((prev) => prev + 1);
         });
 
+        socket.on("participant_left", (data: any) => {
+            console.log("User left:", data);
+            setParticipantsCount((prev) => Math.max(0, prev - 1));
+        });
+
         return () => {
             socket.disconnect();
         };
-    }, [name, avatarSeed]);
+    }, [pin, name, avatarSeed]);
+
+    // Error state - show error message with retry button
+    if (error) {
+        return (
+            <div className="flex flex-col items-center justify-center min-h-screen p-8 bg-red-600 text-white">
+                <XCircle size={64} className="mb-4" />
+                <h1 className="text-2xl font-bold mb-4 text-center">Bağlantı Hatası</h1>
+                <p className="text-center mb-8 max-w-sm">{error}</p>
+                <Button
+                    onClick={() => router.push("/")}
+                    className="bg-white text-red-600 hover:bg-white/90 h-14 px-8 rounded-2xl font-bold text-lg"
+                >
+                    Yeni PIN ile Katıl
+                </Button>
+            </div>
+        );
+    }
+
+    // Event ended state
+    if (eventEnded) {
+        return (
+            <div className="flex flex-col items-center justify-center min-h-screen p-8 bg-indigo-900 text-white">
+                <AlertCircle size={64} className="mb-4 text-yellow-400" />
+                <h1 className="text-2xl font-bold mb-4 text-center">Etkinlik Sona Erdi</h1>
+                <p className="text-center mb-8 max-w-sm">{endMessage}</p>
+                <Button
+                    onClick={() => router.push("/")}
+                    className="bg-white text-indigo-900 hover:bg-white/90 h-14 px-8 rounded-2xl font-bold text-lg"
+                >
+                    Ana Sayfa
+                </Button>
+            </div>
+        );
+    }
+
+    if (waitingInfo) {
+        return (
+            <div className="flex flex-col items-center justify-center min-h-screen p-8 bg-indigo-700 text-white">
+                <div className="max-w-md text-center space-y-5">
+                    <MessageSquare size={64} className="mx-auto" />
+                    <h1 className="text-3xl font-bold">Oturum Dolu</h1>
+                    <p className="text-indigo-100">
+                        {waitingInfo.eventName} oturumunda su anda {waitingInfo.limit} canli katilimci var.
+                    </p>
+                    <div className="rounded-2xl bg-white/10 px-6 py-5 backdrop-blur-md">
+                        <div className="text-sm uppercase tracking-[0.24em] text-indigo-100">Bekleme Sirasi</div>
+                        <div className="mt-2 text-5xl font-black">#{waitingInfo.position}</div>
+                        <p className="mt-3 text-sm text-indigo-100">
+                            Yer acildiginda otomatik olarak oturuma alinacaksiniz.
+                        </p>
+                    </div>
+                    <Button
+                        onClick={() => router.push("/")}
+                        className="bg-white text-indigo-700 hover:bg-white/90 h-14 px-8 rounded-2xl font-bold text-lg"
+                    >
+                        Yeni PIN ile Katil
+                    </Button>
+                </div>
+            </div>
+        );
+    }
 
     return (
         <div className="flex flex-col items-center justify-between min-h-screen p-8 bg-indigo-600 text-white relative overflow-hidden">
@@ -69,7 +187,7 @@ function LobbyContent() {
                 </div>
 
                 <Button
-                    onClick={() => router.push(`/qanda?name=${name}&avatar=${avatarSeed}`)}
+                    onClick={() => router.push(`/qanda?pin=${pin}&name=${name}&avatar=${avatarSeed}`)}
                     className="bg-white/10 hover:bg-white/20 border border-white/20 h-14 px-8 rounded-2xl gap-3 font-bold text-lg backdrop-blur-sm transition-all active:scale-95"
                 >
                     <MessageSquare size={22} /> Soru Sor

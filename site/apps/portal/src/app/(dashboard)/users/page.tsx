@@ -2,9 +2,10 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Search, Shield } from "lucide-react";
+import { Search, Shield, Mail, CheckCircle, XCircle } from "lucide-react";
 import { trpc } from "../../../utils/trpc";
-import { getRoleFromToken, isSuperAdminRole } from "../../../utils/auth";
+import { isSuperAdminRole } from "../../../utils/auth";
+import { fetchPortalAuthSession } from "../../../utils/authSession";
 
 function formatDate(value: string | Date) {
     try {
@@ -24,17 +25,21 @@ export default function UsersPage() {
     const [role, setRole] = useState<string | null>(null);
 
     useEffect(() => {
-        try {
-            const token = localStorage.getItem("auth_token") || localStorage.getItem("token");
-            const r = getRoleFromToken(token);
-            setRole(r);
-            if (!isSuperAdminRole(r)) {
-                router.replace("/dashboard");
-            }
-        } catch {
-            setRole(null);
-            router.replace("/login");
-        }
+        void fetchPortalAuthSession()
+            .then((session) => {
+                setRole(session.role);
+                if (!session.authenticated) {
+                    router.replace("/login");
+                    return;
+                }
+                if (!isSuperAdminRole(session.role)) {
+                    router.replace("/dashboard");
+                }
+            })
+            .catch(() => {
+                setRole(null);
+                router.replace("/login");
+            });
     }, [router]);
 
     const { data, isLoading, error } = trpc.users.list.useQuery(undefined, {
@@ -119,7 +124,23 @@ export default function UsersPage() {
                                     <td className="px-6 py-4 text-sm font-semibold text-gray-900">
                                         {u.name || "-"}
                                     </td>
-                                    <td className="px-6 py-4 text-sm text-gray-700">{u.email}</td>
+                                    <td className="px-6 py-4 text-sm">
+                                        <div className="flex items-center gap-2">
+                                            <Mail size={14} className={u.email_verified ? "text-green-600" : "text-gray-400"} />
+                                            <span className={u.email_verified ? "text-green-700" : "text-gray-700"}>
+                                                {u.email}
+                                            </span>
+                                            {u.email_verified ? (
+                                                <span title="Doğrulanmış">
+                                                    <CheckCircle size={14} className="text-green-500" />
+                                                </span>
+                                            ) : (
+                                                <span title="Doğrulanmamış">
+                                                    <XCircle size={14} className="text-red-400" />
+                                                </span>
+                                            )}
+                                        </div>
+                                    </td>
                                     <td className="px-6 py-4 text-sm">
                                         <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold bg-gray-100 text-gray-700">
                                             {u.role}

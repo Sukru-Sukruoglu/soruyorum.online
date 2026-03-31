@@ -9,7 +9,7 @@ export default function PrivacyPage() {
                     <div className="space-y-6 text-gray-300">
                         <section>
                             <h2 className="text-xl font-semibold text-white mb-3">1. Veri Toplama</h2>
-                            <p>KS Interaktif uygulamaları, Instagram üzerinden herkese açık olarak paylaştığınız içerikleri toplar:</p>
+                            <p>SoruYorum uygulamaları, Instagram üzerinden herkese açık olarak paylaştığınız içerikleri toplar:</p>
                             <ul className="list-disc list-inside mt-2 space-y-1 text-gray-400">
                                 <li>Instagram kullanıcı adınız</li>
                                 <li>Paylaştığınız fotoğraf/video</li>
@@ -39,9 +39,9 @@ export default function PrivacyPage() {
                         <section>
                             <h2 className="text-xl font-semibold text-white mb-3">5. İletişim</h2>
                             <div className="bg-white/5 rounded-xl p-4">
-                                <p className="font-semibold text-white">KS Interaktif</p>
-                                <p>Email: sukru@keypadsistem.com</p>
-                                <p>Web: www.ksinteraktif.com</p>
+                                <p className="font-semibold text-white">SoruYorum Online</p>
+                                <p>Email: info@soruyorum.online</p>
+                                <p>Web: www.soruyorum.online</p>
                             </div>
                         </section>
                     </div>

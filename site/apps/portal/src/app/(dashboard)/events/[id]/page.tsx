@@ -41,12 +41,8 @@ export default function EventDetailPage() {
         if (downloadingReport) return;
         setDownloadingReport(true);
         try {
-            const token = localStorage.getItem('auth_token') || localStorage.getItem('token') || '';
             const response = await fetch(`/api/events/${id}/qanda/report?format=${format}`, {
                 method: 'GET',
-                headers: {
-                    ...(token ? { Authorization: `Bearer ${token}` } : {}),
-                },
             });
 
             if (!response.ok) {
@@ -134,7 +130,7 @@ export default function EventDetailPage() {
             <div className="flex items-center">
                 <div className="flex items-center gap-4">
                     <button
-                        onClick={() => router.back()}
+                        onClick={() => router.push('/dashboard')}
                         className="p-2 hover:bg-gray-100 rounded-full transition-colors"
                     >
                         <ArrowLeft size={20} className="text-gray-500" />
@@ -164,12 +160,10 @@ export default function EventDetailPage() {
                             const nextEnabled = !multiJoinEnabled;
                             setMultiJoinEnabled(nextEnabled);
                             try {
-                                const token = localStorage.getItem('auth_token') || localStorage.getItem('token') || '';
                                 const response = await fetch(`/api/events/${id}/qanda/allow-multiple`, {
                                     method: 'POST',
                                     headers: {
                                         'Content-Type': 'application/json',
-                                        ...(token ? { Authorization: `Bearer ${token}` } : {}),
                                     },
                                     body: JSON.stringify({ enabled: nextEnabled }),
                                 });
@@ -196,12 +190,8 @@ export default function EventDetailPage() {
 
                             setStoppingPresentation(true);
                             try {
-                                const token = localStorage.getItem('auth_token') || localStorage.getItem('token') || '';
                                 const response = await fetch(`/api/events/${id}/qanda/stop`, {
                                     method: 'POST',
-                                    headers: {
-                                        ...(token ? { Authorization: `Bearer ${token}` } : {}),
-                                    },
                                 });
                                 const data = await response.json().catch(() => null);
 

@@ -3,32 +3,22 @@ import { z } from "zod";
 import { TRPCError } from "@trpc/server";
 import QRCode from "qrcode";
 import crypto from "crypto";
-import { getOrganizationAccess, isSuperAdmin } from "../utils/access";
+import { getOrganizationAccess, isSuperAdmin, hasFullAccess } from "../utils/access";
+import { sanitizeThemeForLimitedAccess } from "../utils/themeAccess";
+import { getOrganizationJoinBaseUrl } from "../utils/domains";
 
 const stripTrailingSlashes = (url: string) => url.replace(/\/+$/, "");
-
-const getPreferredJoinBaseUrl = (req: any): string => {
-    const hostRaw = (req?.headers?.["x-forwarded-host"] ?? req?.headers?.host ?? "").toString().toLowerCase();
-    if (hostRaw.includes("soruyorum.online")) {
-        return "https://mobil.soruyorum.online";
-    }
-
-    const env = (process.env.FRONTEND_URL || "").trim();
-    if (env) return stripTrailingSlashes(env);
-
-    return "https://mobil.ksinteraktif.com";
-};
 
 const normalizeJoinUrl = (joinUrl: string, baseUrl: string) => {
     // Prevent accidentally emitting localhost links into QR codes in production.
     const base = stripTrailingSlashes(baseUrl);
     const replacedLocalhost = joinUrl.replace(/https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?/g, base);
 
-    // For soruyorum.online brand, keep join URLs on that host.
+    // Keep canonical join URLs on the active host for the organization.
     try {
         const u = new URL(replacedLocalhost);
         const b = new URL(base);
-        if (b.hostname.includes("soruyorum.online") && u.hostname !== b.hostname) {
+        if (u.hostname !== b.hostname) {
             u.protocol = b.protocol;
             u.host = b.host;
             return u.toString();
@@ -72,11 +62,11 @@ export const eventsRouter = router({
     getPublicInfo: publicProcedure
         .input(z.object({ id: z.string() }))
         .query(async ({ ctx, input }) => {
-            const baseUrl = getPreferredJoinBaseUrl(ctx.req);
             const event = await ctx.prisma.events.findUnique({
                 where: { id: input.id },
                 select: {
                     id: true,
+                    organization_id: true,
                     name: true,
                     pin: true,
                     event_pin: true,
@@ -84,14 +74,28 @@ export const eventsRouter = router({
                     qr_code_url: true,
                     status: true,
                     settings: true,
-                    _count: {
-                        select: { participants: true }
-                    }
                 }
             });
+
             if (!event) {
                 throw new TRPCError({ code: "NOT_FOUND", message: "Event not found" });
             }
+
+            const baseUrl = await getOrganizationJoinBaseUrl(
+                ctx.prisma as any,
+                event.organization_id || undefined,
+                ctx.req as any
+            );
+
+            // Define "Active" as joined AND not left AND seen in the last 45 minutes
+            const activeThreshold = new Date(Date.now() - 45 * 60 * 1000);
+            const participantCount = await ctx.prisma.participants.count({
+                where: {
+                    event_id: event.id,
+                    left_at: null,
+                    last_seen_at: { gte: activeThreshold }
+                }
+            });
 
             let eventPin = event.event_pin || event.pin || "";
             if (!eventPin) {
@@ -114,6 +118,10 @@ export const eventsRouter = router({
             const qrCodeUrl = shouldRegenerateQr(event.qr_code_url)
                 ? await generateQrDataUrl(joinUrl)
                 : event.qr_code_url!;
+            const access = event.organization_id
+                ? await getOrganizationAccess(ctx.prisma as any, event.organization_id)
+                : null;
+            const publicTheme = (event as any)?.settings?.theme ?? null;
 
             const featuredQuestionId = (event as any)?.settings?.qanda?.featuredQuestionId as string | undefined;
             let featuredQuestion: any = null;
@@ -160,18 +168,38 @@ export const eventsRouter = router({
                     // ignore
                 }
             }
+            // Extract the canonical join host from the organization's primary domain.
+            let joinHost: string;
+            try {
+                joinHost = new URL(baseUrl).host;
+            } catch {
+                joinHost = 'mobil.soruyorum.online';
+            }
+
+            const whiteLabelEnabled = Boolean(
+                access?.features?.whiteLabel &&
+                access?.hasActiveSubscription &&
+                !access?.isFreeOrTrial
+            );
+            const platformBrandingEnabled = access?.features?.platformBranding !== false;
+
             return {
                 id: event.id,
                 name: event.name,
                 status: event.status,
                 eventPin,
                 joinUrl,
+                joinHost,
                 qrCodeUrl,
-                participantCount: event._count.participants,
+                participantCount: participantCount,
+                whiteLabel: whiteLabelEnabled,
+                platformBranding: platformBrandingEnabled,
                 anonymousMode: Boolean((event as any)?.settings?.qanda?.anonymousMode),
                 qandaStopped: Boolean((event as any)?.settings?.qanda?.stopped),
-                theme: (event as any)?.settings?.theme ?? null,
+                theme: publicTheme,
                 featuredQuestion,
+                liveQrExpanded: Boolean((event as any)?.settings?.qanda?.liveQrExpanded),
+                liveQrCommandAt: ((event as any)?.settings?.qanda?.liveQrCommandAt as string | undefined) || null,
                 screenMode: ((event as any)?.settings?.qanda?.screenMode as string | undefined) || 'wall',
             };
         }),
@@ -197,13 +225,25 @@ export const eventsRouter = router({
             qrCodeUrl: z.string().optional(),
         }))
         .mutation(async ({ ctx, input }) => {
-            if (!isSuperAdmin(ctx.user)) {
+            if (!hasFullAccess(ctx.user)) {
                 const access = await getOrganizationAccess(ctx.prisma as any, ctx.user.organizationId);
                 if (access.isExpired) {
                     throw new TRPCError({
                         code: "FORBIDDEN",
                         message: `Deneme süreniz doldu (bitiş: ${access.trialEndsAt.toLocaleDateString('tr-TR')}). Devam etmek için lütfen paket satın alın.`,
                     });
+                }
+                // Plan-based event limit
+                if (access.features.maxEvents !== null) {
+                    const eventCount = await ctx.prisma.events.count({
+                        where: { organization_id: ctx.user.organizationId },
+                    });
+                    if (eventCount >= access.features.maxEvents) {
+                        throw new TRPCError({
+                            code: "FORBIDDEN",
+                            message: `Paketinizde en fazla ${access.features.maxEvents} etkinlik oluşturabilirsiniz. Daha fazla etkinlik için paketinizi yükseltin.`,
+                        });
+                    }
                 }
             }
 
@@ -221,7 +261,11 @@ export const eventsRouter = router({
                 }
             }
 
-            const baseUrl = getPreferredJoinBaseUrl(ctx.req);
+            const baseUrl = await getOrganizationJoinBaseUrl(
+                ctx.prisma as any,
+                ctx.user.organizationId,
+                ctx.req as any
+            );
             if (!joinUrl) {
                 joinUrl = `${stripTrailingSlashes(baseUrl)}/join?pin=${eventPin}`;
             }
@@ -251,7 +295,6 @@ export const eventsRouter = router({
     getById: protectedProcedure
         .input(z.string())
         .query(async ({ ctx, input }) => {
-            const baseUrl = getPreferredJoinBaseUrl(ctx.req);
             const event = await ctx.prisma.events.findFirst({
                 where: {
                     id: input,
@@ -268,6 +311,12 @@ export const eventsRouter = router({
             if (!event) {
                 throw new TRPCError({ code: "NOT_FOUND", message: "Event not found or access denied" });
             }
+
+            const baseUrl = await getOrganizationJoinBaseUrl(
+                ctx.prisma as any,
+                ctx.user.organizationId,
+                ctx.req as any
+            );
 
             let eventPin = (event as any).event_pin || (event as any).pin || "";
             if (!eventPin) {
@@ -426,8 +475,13 @@ export const eventsRouter = router({
                 throw new TRPCError({ code: "FORBIDDEN", message: "Event not found or access denied" });
             }
 
+            const activeThreshold = new Date(Date.now() - 45 * 60 * 1000);
             const participants = await ctx.prisma.participants.findMany({
-                where: { event_id: input },
+                where: {
+                    event_id: input,
+                    left_at: null,
+                    last_seen_at: { gte: activeThreshold }
+                },
                 orderBy: { joined_at: 'desc' },
                 select: {
                     id: true,

@@ -1,8 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { applyAuthorizationHeader } from '../../_lib/authCookie';
+import { validateCsrf } from '../../_lib/csrf';
+import { copyForwardedContextHeaders } from '../../_lib/forwardProxyHeaders';
 
 const API_URL = process.env.API_URL || 'http://localhost:4000';
 
 async function handler(req: NextRequest) {
+    const csrfFailure = validateCsrf(req);
+    if (csrfFailure) return csrfFailure;
+
     const url = new URL(req.url);
     // Extract path after /api/events/
     const pathMatch = url.pathname.match(/^\/api\/events\/(.*)$/);
@@ -12,10 +18,9 @@ async function handler(req: NextRequest) {
     const headers: Record<string, string> = {};
 
     // Forward Authorization header
-    const authHeader = req.headers.get('Authorization');
-    if (authHeader) {
-        headers['Authorization'] = authHeader;
-    }
+    applyAuthorizationHeader(req, headers);
+
+    copyForwardedContextHeaders(req, headers);
 
     try {
         const body = req.method !== 'GET' && req.method !== 'DELETE' ? await req.text() : undefined;

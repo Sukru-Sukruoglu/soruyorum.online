@@ -1,8 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { applyAuthorizationHeader } from '../_lib/authCookie';
+import { validateCsrf } from '../_lib/csrf';
+import { copyForwardedContextHeaders } from '../_lib/forwardProxyHeaders';
 
 const API_URL = process.env.API_URL || 'http://localhost:4000';
 
 export async function POST(req: NextRequest) {
+    const csrfFailure = validateCsrf(req);
+    if (csrfFailure) return csrfFailure;
+
     const targetUrl = `${API_URL}/api/events`;
 
     const headers: Record<string, string> = {
@@ -10,10 +16,9 @@ export async function POST(req: NextRequest) {
     };
 
     // Forward Authorization header
-    const authHeader = req.headers.get('Authorization');
-    if (authHeader) {
-        headers['Authorization'] = authHeader;
-    }
+    applyAuthorizationHeader(req, headers);
+
+    copyForwardedContextHeaders(req, headers);
 
     try {
         const body = await req.text();
@@ -49,10 +54,9 @@ export async function GET(req: NextRequest) {
         'Content-Type': 'application/json',
     };
 
-    const authHeader = req.headers.get('Authorization');
-    if (authHeader) {
-        headers['Authorization'] = authHeader;
-    }
+    applyAuthorizationHeader(req, headers);
+
+    copyForwardedContextHeaders(req, headers);
 
     try {
         const response = await fetch(targetUrl, {

@@ -1,9 +1,10 @@
 import axios from 'axios';
+import { clearLegacyAuthStorage } from '../utils/authSession';
 
 // Use relative URL to go through Next.js API proxy (no DNS issues)
 const API_URL = '';
 
-// Axios instance (JWT token automatically added via interceptor if available)
+// Axios instance. Auth is handled server-side via secure httpOnly cookie.
 export const apiClient = axios.create({
     baseURL: API_URL,
     headers: {
@@ -11,29 +12,12 @@ export const apiClient = axios.create({
     },
 });
 
-// Request interceptor (Add JWT token)
-apiClient.interceptors.request.use((config) => {
-    // In a real app, you might get this from a Context or formatted from Clerk/NextAuth
-    // For now, we assume it's stored in localStorage during login
-    if (typeof window !== 'undefined') {
-        const token = localStorage.getItem('auth_token') || localStorage.getItem('token');
-        if (token) {
-            config.headers.Authorization = `Bearer ${token}`;
-        }
-    }
-    return config;
-});
-
 // Response interceptor (Error handling)
 apiClient.interceptors.response.use(
     (response) => response,
     (error) => {
         if (error.response?.status === 401) {
-            // Token invalid, clear it
-            if (typeof window !== 'undefined') {
-                localStorage.removeItem('token');
-                // window.location.href = '/login'; // Optional: redirect
-            }
+            clearLegacyAuthStorage();
         }
         return Promise.reject(error);
     }
@@ -46,8 +30,8 @@ apiClient.interceptors.response.use(
 export interface CreateEventPayload {
     title: string;
     description?: string;
-    eventType: 'quiz' | 'poll' | 'tombala';
-    maxParticipants?: number;
+    eventType: 'quiz' | 'poll' | 'tombala' | 'wheel' | 'ranking' | 'wordcloud' | 'matching';
+    maxParticipants?: number | null;
     // Optional pre-generated fields
     eventPin?: string;
     joinUrl?: string;
@@ -81,7 +65,7 @@ export interface Event {
     eventPin: string;
     joinUrl: string;
     qrCodeUrl: string;
-    maxParticipants: number;
+    maxParticipants: number | null;
     status: 'draft' | 'active' | 'completed';
     createdAt: string;
 }

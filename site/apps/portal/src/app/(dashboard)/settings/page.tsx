@@ -37,7 +37,7 @@ export default function SettingsPage() {
         setEmail(meQuery.data.email ?? "");
         setPhone(meQuery.data.phone ?? "");
         const role = meQuery.data.role;
-        setTitle(isSuperAdminRole(role) ? "Süper Admin" : role === "admin" ? "Admin" : role);
+        setTitle(isSuperAdminRole(role) ? "Süper Admin" : role === "admin" ? "Admin" : role === "junioradmin" ? "Junior Admin" : role);
         setDidInit(true);
     }, [meQuery.data, didInit]);
 

@@ -1,14 +1,19 @@
 import express from 'express';
 import { tenantDb } from '../database/tenantDb';
 import { z } from 'zod';
+import { isSuperAdmin, getOrganizationAccess, hasFullAccess } from '../utils/access';
 
 const router = express.Router();
+
+function isThemeObject(value: unknown): value is Record<string, any> {
+    return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
+}
 
 // Get event info for join page (registration settings)
 router.get('/join-info', async (req, res, next) => {
     try {
         const { pin } = req.query;
-        
+
         if (!pin || typeof pin !== 'string' || pin.length !== 6) {
             return res.status(400).json({ error: 'Geçersiz PIN' });
         }
@@ -38,6 +43,15 @@ router.get('/join-info', async (req, res, next) => {
 
         const settings = (event as any).settings || {};
         const registration = settings.registration || {};
+        const theme = settings.theme || {};
+        const mobileTheme = isThemeObject(theme.mobile) ? theme.mobile : {};
+        const mobileThemeEnabled = mobileTheme.enabled === true;
+        const effectiveTheme = mobileThemeEnabled
+            ? {
+                ...theme,
+                ...mobileTheme,
+            }
+            : theme;
 
         // Return registration settings for dynamic form
         res.json({
@@ -52,6 +66,30 @@ router.get('/join-info', async (req, res, next) => {
                 requirePhone: registration.requirePhone ?? false,
                 requireAvatar: registration.requireAvatar ?? false,
                 requireKvkkConsent: registration.requireKvkkConsent ?? false,
+            },
+            theme: {
+                bgAnimation: effectiveTheme.bgAnimation ?? false,
+                bgAnimationType: effectiveTheme.bgAnimationType ?? 'gradient',
+                auroraColorPreset: effectiveTheme.auroraColorPreset ?? 'blue',
+                gradientColorStart: effectiveTheme.gradientColorStart ?? null,
+                gradientColorEnd: effectiveTheme.gradientColorEnd ?? null,
+                colorPalette: effectiveTheme.colorPalette ?? 'koyu',
+                backgroundColor: effectiveTheme.backgroundColor ?? null,
+                backgroundImage: effectiveTheme.backgroundImage ?? null,
+                background: effectiveTheme.background ?? null,
+                textColor: effectiveTheme.textColor ?? null,
+                buttonColorStart: effectiveTheme.buttonColorStart ?? null,
+                buttonColorEnd: effectiveTheme.buttonColorEnd ?? null,
+                heroLogoUrl: effectiveTheme.heroLogoUrl ?? null,
+                heroPanelColor: effectiveTheme.heroPanelColor ?? null,
+                heroTitleColor: effectiveTheme.heroTitleColor ?? null,
+                heroSubtitleColor: effectiveTheme.heroSubtitleColor ?? null,
+                logoUrl: mobileThemeEnabled
+                    ? effectiveTheme.logoUrl || null
+                    : theme.rightLogo?.url || theme.rightLogoUrl || null,
+                rightLogoUrl: theme.rightLogo?.url || theme.rightLogoUrl || null,
+                rightLogoShadow: theme.rightLogo?.shadow ?? false,
+                rightLogoShadowColor: theme.rightLogo?.shadowColor || '#ffffff',
             },
         });
     } catch (error) {
@@ -84,6 +122,7 @@ router.post('/join', async (req, res, next) => {
                 OR: [{ event_pin: validatedData.pin }, { pin: validatedData.pin }],
             } as any,
             include: {
+                users: { select: { role: true, email: true } },
                 _count: { select: { participants: true } },
             },
         });
@@ -109,8 +148,31 @@ router.post('/join', async (req, res, next) => {
         }
 
         const eventAny = event as any;
-        const maxParticipants = eventAny.max_participants ?? eventAny.maxParticipants;
-        if (maxParticipants && event._count.participants >= maxParticipants) {
+
+        const creator = Array.isArray(eventAny.users) ? eventAny.users[0] : eventAny.users;
+        const creatorIsSuperAdmin = Boolean(
+            creator && hasFullAccess({ role: creator.role, email: creator.email })
+        );
+
+        const storedMaxParticipants =
+            (eventAny.max_participants !== undefined ? eventAny.max_participants : undefined) ??
+            (eventAny.maxParticipants !== undefined ? eventAny.maxParticipants : undefined) ??
+            null;
+
+        // Plan-based participant limit
+        let planLimit: number | null = null;
+        if (!creatorIsSuperAdmin && eventAny.organization_id) {
+            const access = await getOrganizationAccess(
+                tenantDb.direct as any,
+                eventAny.organization_id,
+            );
+            planLimit = access.features.maxParticipants;
+        }
+
+        const maxParticipants = creatorIsSuperAdmin
+            ? storedMaxParticipants
+            : (storedMaxParticipants ?? planLimit ?? 50);
+        if (typeof maxParticipants === 'number' && maxParticipants > 0 && event._count.participants >= maxParticipants) {
             return res.status(400).json({
                 error: 'Etkinlik katılımcı limiti doldu'
             });
@@ -127,82 +189,23 @@ router.post('/join', async (req, res, next) => {
                 }
             });
 
+            const timeoutThreshold = 45 * 60 * 1000; // 45 minutes
+            const now = Date.now();
+
             if (existingParticipant) {
-                // If the user tries to change their name, ensure it's unique among active participants.
-                if (requestedName && requestedName.length > 0) {
-                    const nameTaken = await tenantDb.direct.participants.findFirst({
-                        where: {
-                            event_id: event.id,
-                            left_at: null,
-                            id: { not: existingParticipant.id },
-                            name: { equals: requestedName, mode: 'insensitive' },
-                        } as any,
-                        select: { id: true },
+                // If the session is too old, don't restore it automatically if it's considered "timed out"
+                const lastSeen = existingParticipant.last_seen_at ? new Date(existingParticipant.last_seen_at).getTime() : 0;
+                const isTimedOut = now - lastSeen > timeoutThreshold;
+
+                if (isTimedOut && existingParticipant.left_at === null) {
+                    // Force mark as left if it was stale
+                    await tenantDb.direct.participants.update({
+                        where: { id: existingParticipant.id },
+                        data: { left_at: new Date() }
                     });
-
-                    if (nameTaken) {
-                        return res.status(409).json({
-                            error: 'Bu isim sistemde var, lütfen farklı bir isim seçin',
-                        });
-                    }
-                }
-
-                // If user entered a new name on the same device, keep the same participant but update the stored name.
-                // This matches user expectations when they "log out" and join again with a different name.
-                const shouldUpdateName = Boolean(
-                    requestedName && requestedName.length > 0 && requestedName !== existingParticipant.name
-                );
-
-                // Merge existing metadata with new avatar if provided
-                const existingMetadata = (existingParticipant as any).metadata || {};
-                const updatedMetadata = validatedData.avatar 
-                    ? { ...existingMetadata, avatar: validatedData.avatar }
-                    : existingMetadata;
-
-                const updatedParticipant = shouldUpdateName
-                    ? await tenantDb.direct.participants.update({
-                        where: { id: existingParticipant.id } as any,
-                        data: {
-                            name: requestedName,
-                            last_seen_at: new Date(),
-                            left_at: null,
-                            metadata: updatedMetadata,
-                        } as any,
-                    })
-                    : await tenantDb.direct.participants.update({
-                        where: { id: existingParticipant.id } as any,
-                        data: { last_seen_at: new Date(), left_at: null, metadata: updatedMetadata } as any,
-                    });
-
-                return res.status(200).json({
-                    participant: {
-                        id: updatedParticipant.id,
-                        sessionId: updatedParticipant.id,
-                        name: updatedParticipant.name,
-                    },
-                    event: {
-                        id: event.id,
-                        title: event.name,
-                        eventType: (event as any).event_type ?? (event as any).eventType,
-                    },
-                    restored: true,
-                });
-            }
-
-            // Check if multiple entries are allowed (default to true if not set)
-            const allowMultiple = eventAny.allowMultipleEntries !== false; // Assuming field exists or defaults to true
-
-            // If unique entries required, check existing participants
-            if (!allowMultiple) {
-                const existingParticipant = await tenantDb.direct.participants.findFirst({
-                    where: {
-                        event_id: event.id,
-                        fingerprint: validatedData.fingerprint
-                    }
-                });
-
-                if (existingParticipant) {
-                    // If the user provided a name during a restored join, ensure it isn't taken by someone else.
+                    // fall through to create a new session
+                } else if (!isTimedOut) {
+                    // If the user tries to change their name, ensure it's unique among active participants.
                     if (requestedName && requestedName.length > 0) {
                         const nameTaken = await tenantDb.direct.participants.findFirst({
                             where: {
@@ -221,25 +224,44 @@ router.post('/join', async (req, res, next) => {
                         }
                     }
 
-                    // Consider this a re-join: clear left_at and refresh last_seen_at.
-                    const updatedParticipant = await tenantDb.direct.participants.update({
-                        where: { id: existingParticipant.id } as any,
-                        data: { last_seen_at: new Date(), left_at: null } as any,
-                    });
+                    // If user entered a new name on the same device, keep the same participant but update the stored name.
+                    const shouldUpdateName = Boolean(
+                        requestedName && requestedName.length > 0 && requestedName !== existingParticipant.name
+                    );
 
-                    // If found, return the existing session instead of error to allow re-join
+                    // Merge existing metadata with new avatar if provided
+                    const existingMetadata = (existingParticipant as any).metadata || {};
+                    const updatedMetadata = validatedData.avatar
+                        ? { ...existingMetadata, avatar: validatedData.avatar }
+                        : existingMetadata;
+
+                    const updatedParticipant = shouldUpdateName
+                        ? await tenantDb.direct.participants.update({
+                            where: { id: existingParticipant.id } as any,
+                            data: {
+                                name: requestedName,
+                                last_seen_at: new Date(),
+                                left_at: null,
+                                metadata: updatedMetadata,
+                            } as any,
+                        })
+                        : await tenantDb.direct.participants.update({
+                            where: { id: existingParticipant.id } as any,
+                            data: { last_seen_at: new Date(), left_at: null, metadata: updatedMetadata } as any,
+                        });
+
                     return res.status(200).json({
                         participant: {
                             id: updatedParticipant.id,
-                            sessionId: updatedParticipant.id, // Re-use ID as session
+                            sessionId: updatedParticipant.id,
                             name: updatedParticipant.name,
                         },
                         event: {
                             id: event.id,
                             title: event.name,
-                            eventType: eventAny.event_type ?? eventAny.eventType,
+                            eventType: (event as any).event_type ?? (event as any).eventType,
                         },
-                        restored: true
+                        restored: true,
                     });
                 }
             }
@@ -284,7 +306,7 @@ router.post('/join', async (req, res, next) => {
         const participant = await tenantDb.direct.participants.create({
             data: {
                 id: randomUUID(),
-            event_id: event.id,
+                event_id: event.id,
                 name: requestedName || 'Anonim',
                 email: validatedData.email,
                 phone: validatedData.phone,
@@ -343,9 +365,9 @@ router.post('/heartbeat', async (req, res, next) => {
 
         // Check if event is ended or cancelled - notify client to exit
         if (event.status === 'ended' || event.status === 'cancelled') {
-            return res.json({ 
-                success: false, 
-                eventStatus: event.status, 
+            return res.json({
+                success: false,
+                eventStatus: event.status,
                 shouldExit: true,
                 message: event.status === 'ended' ? 'Etkinlik sona erdi' : 'Etkinlik iptal edildi'
             });
@@ -357,6 +379,34 @@ router.post('/heartbeat', async (req, res, next) => {
 
         if (event.status !== 'active' && event.status !== 'draft') {
             return res.status(400).json({ error: 'Event is not active', eventStatus: event.status });
+        }
+
+        // Check for inactivity timeout (45 minutes)
+        const participant = await tenantDb.direct.participants.findFirst({
+            where: { id: participantId, event_id: eventId } as any,
+            select: { id: true, last_seen_at: true, left_at: true }
+        });
+
+        if (!participant) {
+            return res.status(404).json({ error: 'Participant not found' });
+        }
+
+        const timeoutThreshold = 45 * 60 * 1000;
+        const lastSeen = (participant as any).last_seen_at ? new Date((participant as any).last_seen_at).getTime() : 0;
+        const isTimedOut = Date.now() - lastSeen > timeoutThreshold;
+
+        if (isTimedOut) {
+            // Mark as left
+            await tenantDb.direct.participants.update({
+                where: { id: participant.id },
+                data: { left_at: new Date() }
+            });
+            return res.status(403).json({
+                success: false,
+                shouldExit: true,
+                code: 'SESSION_EXPIRED',
+                message: 'Oturumunuz zaman aşımına uğradı (45 dk hareketsizlik). Lütfen tekrar giriş yapın.'
+            });
         }
 
         // Update participant lastSeenAt (scoped to event)

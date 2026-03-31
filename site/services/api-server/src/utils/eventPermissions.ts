@@ -74,7 +74,7 @@ export function canManageEventSteps(
     const adminCanManage = effectiveAdminCanManage; // undefined veya true ise true
     const moderatorCanManage = effectiveModeratorCanManage;
     
-    if (userRole === 'admin' && adminCanManage) {
+    if ((userRole === 'admin' || userRole === 'junioradmin') && adminCanManage) {
         return true;
     }
     
@@ -121,7 +121,7 @@ export function getEventPermissions(
     const gameplay = eventSettings?.gameplay || {};
     const derived = deriveStepManageFlags(gameplay);
     
-    const isAdmin = userRole === 'admin';
+    const isAdmin = userRole === 'admin' || userRole === 'junioradmin';
     const isModerator = userRole === 'moderator';
     const isOrganizer = userRole === 'organizer';
     

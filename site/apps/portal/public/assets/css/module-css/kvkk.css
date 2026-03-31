@@ -1,0 +1,214 @@
+.kvkk-content {
+    position: relative;
+    display: block;
+    background-color: var(--techguru-black);
+    padding: 100px 0 120px;
+}
+
+.kvkk-content .container {
+    max-width: 900px;
+}
+
+.kvkk-content__logo {
+    text-align: center;
+    margin-bottom: 40px;
+}
+
+.kvkk-content__logo img {
+    max-width: 220px;
+}
+
+.kvkk-content h2 {
+    font-size: 36px;
+    font-weight: 700;
+    color: var(--techguru-white);
+    margin-bottom: 10px;
+}
+
+.kvkk-content h3 {
+    font-size: 22px;
+    font-weight: 700;
+    color: var(--techguru-white);
+    margin-top: 35px;
+    margin-bottom: 15px;
+}
+
+.kvkk-content p,
+.kvkk-content li {
+    font-size: 16px;
+    line-height: 28px;
+    color: var(--techguru-gray);
+}
+
+.kvkk-content ul {
+    padding-left: 20px;
+    margin-bottom: 15px;
+}
+
+.kvkk-content ul li {
+    margin-bottom: 8px;
+    list-style: disc;
+}
+
+.kvkk-content .kvkk-subtitle {
+    font-size: 16px;
+    color: var(--techguru-base);
+    margin-bottom: 30px;
+    cursor: pointer;
+    text-decoration: underline;
+}
+
+.kvkk-content strong {
+    color: var(--techguru-white);
+}
+
+.kvkk-content .info-block {
+    background-color: rgba(var(--techguru-white-rgb), .05);
+    border-radius: 10px;
+    padding: 30px;
+    margin-top: 20px;
+    margin-bottom: 20px;
+}
+
+.kvkk-content .info-block p {
+    margin-bottom: 5px;
+}
+
+.kvkk-content .kvkk-subtitle a {
+    color: var(--techguru-base);
+    text-decoration: underline;
+}
+
+.kvkk-content .highlight-block {
+    background-color: rgba(var(--techguru-white-rgb), .08);
+    border-left: 4px solid var(--techguru-base);
+    border-radius: 0 10px 10px 0;
+    padding: 30px;
+    margin-top: 25px;
+    margin-bottom: 25px;
+}
+
+.kvkk-content .highlight-block p,
+.kvkk-content .highlight-block li {
+    color: var(--techguru-white);
+}
+
+.kvkk-content .consent-block {
+    background: linear-gradient(135deg, rgba(var(--techguru-white-rgb), .08), rgba(var(--techguru-white-rgb), .03));
+    border: 1px solid rgba(var(--techguru-white-rgb), .15);
+    border-radius: 10px;
+    padding: 35px;
+    margin-top: 30px;
+    margin-bottom: 30px;
+}
+
+.kvkk-content .consent-block p {
+    color: var(--techguru-white);
+    font-weight: 500;
+}
+
+.kvkk-content .kvkk-subtitle a {
+    color: var(--techguru-base);
+    text-decoration: underline;
+}
+
+.kvkk-content .highlight-block {
+    background-color: rgba(var(--techguru-white-rgb), .08);
+    border-left: 4px solid var(--techguru-base);
+    border-radius: 0 10px 10px 0;
+    padding: 30px;
+    margin-top: 25px;
+    margin-bottom: 25px;
+}
+
+.kvkk-content .highlight-block p,
+.kvkk-content .highlight-block li {
+    color: var(--techguru-white);
+}
+
+.kvkk-content .consent-block {
+    background: linear-gradient(135deg, rgba(var(--techguru-white-rgb), .08), rgba(var(--techguru-white-rgb), .03));
+    border: 1px solid rgba(var(--techguru-white-rgb), .15);
+    border-radius: 10px;
+    padding: 35px;
+    margin-top: 30px;
+    margin-bottom: 30px;
+}
+
+.kvkk-content .consent-block p {
+    color: var(--techguru-white);
+    font-weight: 500;
+}
+
+/* Mobile Responsive */
+@media only screen and (min-width: 768px) and (max-width: 991px) {
+    .kvkk-content {
+        padding: 80px 0 80px;
+    }
+
+    .kvkk-content h2 {
+        font-size: 30px;
+    }
+}
+
+@media only screen and (max-width: 767px) {
+    .kvkk-content {
+        padding: 60px 0 60px;
+    }
+
+    .kvkk-content .container {
+        max-width: 100%;
+        padding-left: 15px;
+        padding-right: 15px;
+    }
+
+    .kvkk-content__logo {
+        margin-bottom: 25px;
+    }
+
+    .kvkk-content__logo img {
+        max-width: 160px;
+    }
+
+    .kvkk-content h2 {
+        font-size: 24px;
+        margin-bottom: 8px;
+    }
+
+    .kvkk-content h3 {
+        font-size: 18px;
+        margin-top: 25px;
+        margin-bottom: 10px;
+    }
+
+    .kvkk-content p,
+    .kvkk-content li {
+        font-size: 14px;
+        line-height: 24px;
+    }
+
+    .kvkk-content .info-block {
+        padding: 20px 15px;
+    }
+
+    .kvkk-content .highlight-block {
+        padding: 20px 15px;
+        margin-top: 20px;
+        margin-bottom: 20px;
+    }
+
+    .kvkk-content .consent-block {
+        padding: 25px 15px;
+        margin-top: 20px;
+        margin-bottom: 20px;
+    }
+
+    .kvkk-content .consent-block p[style] {
+        font-size: 16px !important;
+    }
+
+    .kvkk-content .kvkk-subtitle {
+        font-size: 14px;
+        margin-bottom: 20px;
+    }
+}

@@ -1,5 +1,5 @@
-CREATE DATABASE IF NOT EXISTS ksinteraktif_esinibul;
-USE ksinteraktif_esinibul;
+CREATE DATABASE IF NOT EXISTS soruyorum_esinibul;
+USE soruyorum_esinibul;
 
 CREATE TABLE IF NOT EXISTS puanlar (
     id INT AUTO_INCREMENT PRIMARY KEY,

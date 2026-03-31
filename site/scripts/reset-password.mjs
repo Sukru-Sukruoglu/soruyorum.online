@@ -4,7 +4,7 @@ import { PrismaClient } from '@prisma/client';
 const prisma = new PrismaClient();
 const scrypt = new Scrypt();
 
-const email = process.argv[2] || 'admin@ksinteraktif.com';
+const email = process.argv[2] || 'admin@soruyorum.online';
 const password = process.argv[3] || 'admin123';
 
 async function main() {

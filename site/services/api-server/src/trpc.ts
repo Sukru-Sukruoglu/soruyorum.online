@@ -84,3 +84,11 @@ export const protectedProcedure = t.procedure.use(({ ctx, next }) => {
         },
     });
 });
+
+export const superAdminProcedure = protectedProcedure.use(async ({ ctx, next }) => {
+    const { isSuperAdmin } = await import("./utils/access");
+    if (!isSuperAdmin({ role: ctx.user.role as string, email: ctx.user.email as string })) {
+        throw new TRPCError({ code: "FORBIDDEN", message: "Superadmin access required" });
+    }
+    return next({ ctx });
+});

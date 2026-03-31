@@ -16,7 +16,8 @@ import {
     XCircle,
 } from "lucide-react";
 import { trpc } from "../../../../utils/trpc";
-import { getRoleFromToken, isSuperAdminRole } from "../../../../utils/auth";
+import { isSuperAdminRole } from "../../../../utils/auth";
+import { fetchPortalAuthSession } from "../../../../utils/authSession";
 
 type BillingOpsFilters = {
     search?: string;
@@ -70,7 +71,7 @@ function prettyStatus(status: string | null | undefined): string {
         success: "Success",
         missing: "Eksik",
         none: "Yok",
-        free: "Free",
+        free: "EVENT PASS",
         trial: "Trial",
     };
     return map[normalized] || normalized;
@@ -143,17 +144,21 @@ export default function BillingOpsPage() {
     });
 
     useEffect(() => {
-        try {
-            const token = localStorage.getItem("auth_token") || localStorage.getItem("token");
-            const nextRole = getRoleFromToken(token);
-            setRole(nextRole);
-            if (!isSuperAdminRole(nextRole)) {
-                router.replace("/dashboard");
-            }
-        } catch {
-            setRole(null);
-            router.replace("/login");
-        }
+        void fetchPortalAuthSession()
+            .then((session) => {
+                setRole(session.role);
+                if (!session.authenticated) {
+                    router.replace("/login");
+                    return;
+                }
+                if (!isSuperAdminRole(session.role)) {
+                    router.replace("/dashboard");
+                }
+            })
+            .catch(() => {
+                setRole(null);
+                router.replace("/login");
+            });
     }, [router]);
 
     const queryInput = useMemo(
@@ -207,7 +212,7 @@ export default function BillingOpsPage() {
     }
 
     return (
-        <div className="mx-auto max-w-[1680px] px-6 py-8 text-white xl:px-10">
+        <div className="mx-auto max-w-[1520px] px-4 py-8 text-white lg:px-6 xl:px-8 2xl:px-10">
             <div className="mb-8 flex flex-wrap items-start justify-between gap-4">
                 <div>
                     <div className="inline-flex items-center gap-2 rounded-full border border-amber-400/20 bg-amber-500/10 px-3 py-1 text-xs font-semibold uppercase tracking-[0.16em] text-amber-200">
@@ -218,7 +223,7 @@ export default function BillingOpsPage() {
                         <Wallet className="text-amber-300" size={30} />
                         Billing Ops
                     </h1>
-                    <p className="mt-2 max-w-3xl text-sm text-white/55">
+                    <p className="mt-2 max-w-2xl text-sm text-white/55">
                         Payment, subscription, addon, callback ve effective access durumlarini operasyonel olarak tek ekrandan izleyin.
                     </p>
                 </div>
@@ -231,7 +236,7 @@ export default function BillingOpsPage() {
                 </button>
             </div>
 
-            <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-6">
+            <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-6">
                 <KpiCard icon={CheckCircle2} label="Active Subscriptions" value={data?.summary.activeSubscriptionsCount ?? 0} tone="bg-emerald-500/15 text-emerald-200" />
                 <KpiCard icon={CalendarClock} label="Pending Payments" value={data?.summary.pendingPaymentsCount ?? 0} tone="bg-amber-500/15 text-amber-200" />
                 <KpiCard icon={XCircle} label="Failed Payments" value={data?.summary.failedPaymentsCount ?? 0} tone="bg-rose-500/15 text-rose-200" />
@@ -246,18 +251,18 @@ export default function BillingOpsPage() {
                     Problem Records
                 </div>
                 {data?.problemRecords.length ? (
-                    <div className="grid gap-3 lg:grid-cols-2 xl:grid-cols-3">
+                    <div className="grid gap-3 lg:grid-cols-2 2xl:grid-cols-3">
                         {data.problemRecords.map((problem) => (
                             <button
                                 key={`${problem.organizationId}-${problem.updatedAt}`}
                                 type="button"
                                 onClick={() => setSelectedRecordId(problem.organizationId)}
-                                className="rounded-2xl border border-white/10 bg-black/20 p-4 text-left transition hover:border-rose-300/30 hover:bg-black/30"
+                                className="min-w-0 rounded-2xl border border-white/10 bg-black/20 p-4 text-left transition hover:border-rose-300/30 hover:bg-black/30"
                             >
                                 <div className="flex items-start justify-between gap-3">
-                                    <div>
-                                        <div className="font-bold text-white">{problem.organizationName}</div>
-                                        <div className="mt-1 text-xs text-white/45">{problem.merchantOid || "merchant_oid yok"}</div>
+                                    <div className="min-w-0">
+                                        <div className="break-words font-bold text-white">{problem.organizationName}</div>
+                                        <div className="mt-1 break-all text-xs text-white/45">{problem.merchantOid || "merchant_oid yok"}</div>
                                     </div>
                                     <ChevronRight size={18} className="text-white/35" />
                                 </div>
@@ -281,11 +286,11 @@ export default function BillingOpsPage() {
                 )}
             </div>
 
-            <div className="mt-8 grid gap-6 xl:grid-cols-[minmax(0,1fr)_420px]">
+            <div className="mt-8 space-y-6">
                 <div className="rounded-3xl border border-white/10 bg-white/5 shadow-[0_24px_80px_rgba(0,0,0,0.16)]">
                     <div className="border-b border-white/10 p-5">
-                        <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-                            <label className="relative block xl:col-span-2">
+                        <div className="grid gap-3 md:grid-cols-2 2xl:grid-cols-4">
+                            <label className="relative block 2xl:col-span-2">
                                 <Search size={16} className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-white/35" />
                                 <input
                                     value={filters.search}
@@ -357,97 +362,115 @@ export default function BillingOpsPage() {
 
                     {error ? <div className="p-5 text-sm text-rose-300">Billing Ops yüklenemedi: {error.message}</div> : null}
 
-                    <div className="overflow-x-auto">
-                        <table className="min-w-full border-collapse text-left text-sm">
-                            <thead className="bg-black/20 text-white/45">
-                                <tr>
-                                    <th className="px-4 py-3 font-semibold">Organization</th>
-                                    <th className="px-4 py-3 font-semibold">Owner</th>
-                                    <th className="px-4 py-3 font-semibold">Raw Plan</th>
-                                    <th className="px-4 py-3 font-semibold">Effective</th>
-                                    <th className="px-4 py-3 font-semibold">Subscription</th>
-                                    <th className="px-4 py-3 font-semibold">Gateway</th>
-                                    <th className="px-4 py-3 font-semibold">Activation</th>
-                                    <th className="px-4 py-3 font-semibold">Current Period End</th>
-                                    <th className="px-4 py-3 font-semibold">Addons</th>
-                                    <th className="px-4 py-3 font-semibold">Merchant OID</th>
-                                    <th className="px-4 py-3 font-semibold">Updated</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                {(data?.records ?? []).map((record) => {
-                                    const isSelected = record.organizationId === selectedRecord?.organizationId;
-                                    return (
-                                        <tr
-                                            key={record.organizationId}
-                                            onClick={() => setSelectedRecordId(record.organizationId)}
-                                            className={`cursor-pointer border-t border-white/5 transition ${isSelected ? "bg-amber-500/10" : "hover:bg-white/5"}`}
-                                        >
-                                            <td className="px-4 py-4">
-                                                <div className="font-semibold text-white">{record.organizationName}</div>
-                                                <div className="text-xs text-white/35">{record.organizationSlug || record.organizationId}</div>
-                                            </td>
-                                            <td className="px-4 py-4 text-white/75">{record.owner?.email || "-"}</td>
-                                            <td className="px-4 py-4"><Badge value={record.rawOrganizationPlan} /></td>
-                                            <td className="px-4 py-4">
-                                                <div><Badge value={record.effectiveAccess.plan} /></div>
-                                                <div className="mt-1 text-xs text-white/35">{record.effectiveAccess.reason}</div>
-                                            </td>
-                                            <td className="px-4 py-4"><Badge value={record.subscription?.status} /></td>
-                                            <td className="px-4 py-4"><Badge value={record.subscription?.gatewayStatus} /></td>
-                                            <td className="px-4 py-4"><Badge value={record.subscription?.activationStatus} /></td>
-                                            <td className="px-4 py-4 text-white/75">{formatDateTime(record.subscription?.currentPeriodEnd)}</td>
-                                            <td className="px-4 py-4 text-white/75">{record.addons.map((addon) => addon.id || addon.name).filter(Boolean).join(", ") || "-"}</td>
-                                            <td className="px-4 py-4 text-xs text-white/55">{record.merchantOid || "-"}</td>
-                                            <td className="px-4 py-4 text-white/55">{formatDateTime(record.updatedAt)}</td>
-                                        </tr>
-                                    );
-                                })}
-                                {!isLoading && (data?.records.length ?? 0) === 0 ? (
-                                    <tr>
-                                        <td colSpan={11} className="px-4 py-10 text-center text-sm text-white/45">Kayıt bulunamadı.</td>
-                                    </tr>
-                                ) : null}
-                            </tbody>
-                        </table>
+                    <div className="p-4 sm:p-5">
+                        <div className="hidden rounded-2xl border border-white/10 bg-black/20 px-4 py-3 text-xs font-semibold uppercase tracking-[0.16em] text-white/40 xl:grid xl:grid-cols-[minmax(0,2.2fr)_minmax(0,1.25fr)_minmax(0,0.85fr)_minmax(0,0.85fr)_minmax(0,0.85fr)_minmax(0,1fr)] xl:gap-4">
+                            <div>Organization</div>
+                            <div>Effective Access</div>
+                            <div>Subscription</div>
+                            <div>Gateway</div>
+                            <div>Activation</div>
+                            <div>Updated</div>
+                        </div>
+
+                        <div className="mt-4 space-y-3">
+                            {(data?.records ?? []).map((record) => {
+                                const isSelected = record.organizationId === selectedRecord?.organizationId;
+                                return (
+                                    <button
+                                        key={record.organizationId}
+                                        type="button"
+                                        onClick={() => setSelectedRecordId(record.organizationId)}
+                                        className={`block w-full rounded-2xl border px-4 py-4 text-left transition sm:px-5 ${isSelected ? "border-amber-300/30 bg-amber-500/10" : "border-white/10 bg-black/20 hover:border-white/20 hover:bg-white/5"}`}
+                                    >
+                                        <div className="grid gap-4 xl:grid-cols-[minmax(0,2.2fr)_minmax(0,1.25fr)_minmax(0,0.85fr)_minmax(0,0.85fr)_minmax(0,0.85fr)_minmax(0,1fr)] xl:items-center">
+                                            <div className="min-w-0">
+                                                <div className="break-words text-xl font-bold text-white">{record.organizationName}</div>
+                                                <div className="mt-2 grid gap-1 text-sm text-white/55 sm:grid-cols-2 xl:grid-cols-1">
+                                                    <div className="break-all">{record.owner?.email || "owner yok"}</div>
+                                                    <div className="break-all">{record.organizationSlug || record.organizationId}</div>
+                                                </div>
+                                                <div className="mt-3 flex flex-wrap gap-2">
+                                                    <Badge value={record.rawOrganizationPlan} />
+                                                    {record.addons.length ? <span className="inline-flex items-center rounded-full border border-sky-400/20 bg-sky-500/10 px-2.5 py-1 text-xs font-semibold text-sky-100">{record.addons.length} addon</span> : null}
+                                                </div>
+                                            </div>
+
+                                            <div className="min-w-0 rounded-2xl border border-white/10 bg-white/[0.03] p-3 xl:border-0 xl:bg-transparent xl:p-0">
+                                                <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-white/35 xl:hidden">Effective Access</div>
+                                                <div className="mt-2 xl:mt-0"><Badge value={record.effectiveAccess.plan} /></div>
+                                                <div className="mt-2 break-words text-sm text-white/45">{record.effectiveAccess.reason}</div>
+                                                <div className="mt-1 text-xs text-white/35">Dönem sonu: {formatDateTime(record.subscription?.currentPeriodEnd)}</div>
+                                            </div>
+
+                                            <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-3 xl:border-0 xl:bg-transparent xl:p-0">
+                                                <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-white/35 xl:hidden">Subscription</div>
+                                                <div className="mt-2 xl:mt-0"><Badge value={record.subscription?.status} /></div>
+                                            </div>
+
+                                            <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-3 xl:border-0 xl:bg-transparent xl:p-0">
+                                                <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-white/35 xl:hidden">Gateway</div>
+                                                <div className="mt-2 xl:mt-0"><Badge value={record.subscription?.gatewayStatus} /></div>
+                                            </div>
+
+                                            <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-3 xl:border-0 xl:bg-transparent xl:p-0">
+                                                <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-white/35 xl:hidden">Activation</div>
+                                                <div className="mt-2 xl:mt-0"><Badge value={record.subscription?.activationStatus} /></div>
+                                            </div>
+
+                                            <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-3 xl:border-0 xl:bg-transparent xl:p-0">
+                                                <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-white/35 xl:hidden">Updated</div>
+                                                <div className="mt-2 text-sm text-white/70 xl:mt-0">{formatDateTime(record.updatedAt)}</div>
+                                                {record.merchantOid ? <div className="mt-1 break-all text-xs text-white/35">{record.merchantOid}</div> : null}
+                                            </div>
+                                        </div>
+                                    </button>
+                                );
+                            })}
+
+                            {!isLoading && (data?.records.length ?? 0) === 0 ? (
+                                <div className="rounded-2xl border border-dashed border-white/10 px-4 py-10 text-center text-sm text-white/45">
+                                    Kayıt bulunamadı.
+                                </div>
+                            ) : null}
+                        </div>
                     </div>
                 </div>
 
-                <aside className="sticky top-24 h-fit rounded-3xl border border-white/10 bg-white/5 p-5 shadow-[0_24px_80px_rgba(0,0,0,0.18)]">
+                <aside className="h-fit rounded-3xl border border-white/10 bg-white/5 p-5 shadow-[0_24px_80px_rgba(0,0,0,0.18)]">
                     {selectedRecord ? (
-                        <div>
+                        <div className="min-w-0">
                             <div className="mb-5 flex items-start justify-between gap-3">
-                                <div>
+                                <div className="min-w-0">
                                     <div className="text-xs font-semibold uppercase tracking-[0.16em] text-white/35">Detail</div>
-                                    <h2 className="mt-2 text-2xl font-black text-white">{selectedRecord.organizationName}</h2>
-                                    <div className="mt-1 text-sm text-white/45">{selectedRecord.owner?.email || "owner yok"}</div>
+                                    <h2 className="mt-2 break-words text-2xl font-black text-white">{selectedRecord.organizationName}</h2>
+                                    <div className="mt-1 break-all text-sm text-white/45">{selectedRecord.owner?.email || "owner yok"}</div>
                                 </div>
                                 <Badge value={selectedRecord.subscription?.status} />
                             </div>
 
                             <div className="grid gap-3 sm:grid-cols-2">
-                                <div className="rounded-2xl border border-white/10 bg-black/20 p-4">
+                                <div className="min-w-0 rounded-2xl border border-white/10 bg-black/20 p-4">
                                     <div className="text-xs uppercase tracking-[0.14em] text-white/35">Organization</div>
                                     <div className="mt-3 space-y-2 text-sm text-white/80">
                                         <div>Plan: <span className="font-semibold text-white">{selectedRecord.rawOrganizationPlan}</span></div>
                                         <div>Effective: <span className="font-semibold text-white">{selectedRecord.effectiveAccess.plan}</span></div>
-                                        <div>Reason: <span className="text-white/65">{selectedRecord.effectiveAccess.reason}</span></div>
+                                        <div>Reason: <span className="break-words text-white/65">{selectedRecord.effectiveAccess.reason}</span></div>
                                         <div>Trial Ends: <span className="text-white/65">{formatDateTime(selectedRecord.effectiveAccess.trialEndsAt)}</span></div>
                                     </div>
                                 </div>
 
-                                <div className="rounded-2xl border border-white/10 bg-black/20 p-4">
+                                <div className="min-w-0 rounded-2xl border border-white/10 bg-black/20 p-4">
                                     <div className="text-xs uppercase tracking-[0.14em] text-white/35">Owner</div>
                                     <div className="mt-3 space-y-2 text-sm text-white/80">
                                         <div>Name: <span className="font-semibold text-white">{selectedRecord.owner?.name || "-"}</span></div>
-                                        <div>Email: <span className="text-white/65">{selectedRecord.owner?.email || "-"}</span></div>
+                                        <div>Email: <span className="break-all text-white/65">{selectedRecord.owner?.email || "-"}</span></div>
                                         <div>Role: <span className="text-white/65">{selectedRecord.owner?.role || "-"}</span></div>
                                         <div>Phone: <span className="text-white/65">{selectedRecord.owner?.phone || "-"}</span></div>
                                     </div>
                                 </div>
                             </div>
 
-                            <div className="mt-5 rounded-2xl border border-white/10 bg-black/20 p-4">
+                            <div className="mt-5 min-w-0 rounded-2xl border border-white/10 bg-black/20 p-4">
                                 <div className="mb-3 text-xs uppercase tracking-[0.14em] text-white/35">Subscription</div>
                                 <div className="grid gap-3 text-sm text-white/80 sm:grid-cols-2">
                                     <div>Package: <span className="font-semibold text-white">{selectedRecord.subscription?.packageName || selectedRecord.subscription?.packageId || "-"}</span></div>
@@ -482,33 +505,33 @@ export default function BillingOpsPage() {
                             </div>
 
                             <div className="mt-5 grid gap-4">
-                                <div className="rounded-2xl border border-white/10 bg-black/20 p-4">
+                                <div className="min-w-0 rounded-2xl border border-white/10 bg-black/20 p-4">
                                     <div className="mb-3 text-xs uppercase tracking-[0.14em] text-white/35">Addons</div>
                                     {selectedRecord.addons.length ? (
                                         <div className="space-y-2 text-sm text-white/80">
                                             {selectedRecord.addons.map((addon, index) => (
-                                                <div key={`${addon.id}-${index}`} className="rounded-xl border border-white/10 bg-white/5 p-3">
-                                                    <div className="font-semibold text-white">{addon.name || addon.id || "Addon"}</div>
-                                                    <div className="mt-1 text-xs text-white/45">{addon.scope || "scope yok"}{addon.eventId ? ` • event ${addon.eventId}` : ""}</div>
+                                                <div key={`${addon.id}-${index}`} className="min-w-0 rounded-xl border border-white/10 bg-white/5 p-3">
+                                                    <div className="break-words font-semibold text-white">{addon.name || addon.id || "Addon"}</div>
+                                                    <div className="mt-1 break-all text-xs text-white/45">{addon.scope || "scope yok"}{addon.eventId ? ` • event ${addon.eventId}` : ""}</div>
                                                 </div>
                                             ))}
                                         </div>
                                     ) : <div className="text-sm text-white/45">Aktif addon yok.</div>}
                                 </div>
 
-                                <div className="rounded-2xl border border-white/10 bg-black/20 p-4">
+                                <div className="min-w-0 rounded-2xl border border-white/10 bg-black/20 p-4">
                                     <div className="mb-3 text-xs uppercase tracking-[0.14em] text-white/35">Entitlements</div>
-                                    <pre className="max-h-56 overflow-auto rounded-xl border border-white/10 bg-black/30 p-3 text-xs text-white/75">{JSON.stringify(selectedRecord.entitlements, null, 2)}</pre>
+                                    <pre className="max-h-56 overflow-auto whitespace-pre-wrap break-all rounded-xl border border-white/10 bg-black/30 p-3 text-xs text-white/75">{JSON.stringify(selectedRecord.entitlements, null, 2)}</pre>
                                 </div>
 
-                                <div className="rounded-2xl border border-white/10 bg-black/20 p-4">
+                                <div className="min-w-0 rounded-2xl border border-white/10 bg-black/20 p-4">
                                     <div className="mb-3 text-xs uppercase tracking-[0.14em] text-white/35">Gateway Metadata</div>
-                                    <pre className="max-h-56 overflow-auto rounded-xl border border-white/10 bg-black/30 p-3 text-xs text-white/75">{JSON.stringify(selectedRecord.metadata.gateway, null, 2)}</pre>
+                                    <pre className="max-h-56 overflow-auto whitespace-pre-wrap break-all rounded-xl border border-white/10 bg-black/30 p-3 text-xs text-white/75">{JSON.stringify(selectedRecord.metadata.gateway, null, 2)}</pre>
                                 </div>
 
-                                <div className="rounded-2xl border border-white/10 bg-black/20 p-4">
+                                <div className="min-w-0 rounded-2xl border border-white/10 bg-black/20 p-4">
                                     <div className="mb-3 text-xs uppercase tracking-[0.14em] text-white/35">Activation Metadata</div>
-                                    <pre className="max-h-56 overflow-auto rounded-xl border border-white/10 bg-black/30 p-3 text-xs text-white/75">{JSON.stringify(selectedRecord.metadata.activation, null, 2)}</pre>
+                                    <pre className="max-h-56 overflow-auto whitespace-pre-wrap break-all rounded-xl border border-white/10 bg-black/30 p-3 text-xs text-white/75">{JSON.stringify(selectedRecord.metadata.activation, null, 2)}</pre>
                                 </div>
 
                                 <div className="rounded-2xl border border-rose-400/15 bg-rose-500/5 p-4">

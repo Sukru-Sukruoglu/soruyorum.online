@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { Twitter, Linkedin, Youtube, Instagram } from "lucide-react";
+import { Logo } from "@ks-interaktif/ui";
 
 export function Footer() {
     return (
@@ -9,10 +10,7 @@ export function Footer() {
                     {/* Brand */}
                     <div className="col-span-1">
                         <Link href="/" className="flex items-center gap-2 mb-6">
-                            <div className="w-28 h-28 relative">
-                                {/* eslint-disable-next-line @next/next/no-img-element */}
-                                <img src="/images/kslogohome.png" alt="KS İnteraktif Logo" className="w-full h-full object-contain" />
-                            </div>
+                            <Logo variant="dark" size="sm" />
                         </Link>
                         <p className="text-gray-400 leading-relaxed mb-6">
                             Toplantı ve etkinliklerinizi interaktif hale getirin.

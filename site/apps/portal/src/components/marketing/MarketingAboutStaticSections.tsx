@@ -162,20 +162,7 @@ export function MarketingAboutStaticSections() {
         </div>
         <div className="container">
           <div className="row">
-            <div className="col-xl-6">
-              <div className="about-two__left">
-                <div className="about-two__img-box">
-                  <div className="about-two__img">
-                    <img src="/assets/images/resources/about-two-img-1.jpg" alt="" />
-                  </div>
-                  <div className="about-two__img-2">
-                    <img src="/assets/images/resources/about-two-img-2.jpg" alt="" />
-                  </div>
-                  <div className="about-two__shape-1"></div>
-                </div>
-              </div>
-            </div>
-            <div className="col-xl-6">
+            <div className="col-xl-12">
               <div className="about-two__right">
                 <div className="section-title text-left sec-title-animation animation-style2">
                   <div className="section-title__tagline-box">

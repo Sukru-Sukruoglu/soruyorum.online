@@ -1,14 +1,20 @@
 {
-    "name": "ks-interaktif",
+    "name": "soruyorum-online",
     "private": true,
     "scripts": {
         "build": "turbo run build",
         "dev": "turbo run dev",
         "lint": "turbo run lint",
+        "ops:up": "bash scripts/deploy-soruyorum.sh up",
+        "ops:down": "bash scripts/deploy-soruyorum.sh down",
+        "ops:ps": "bash scripts/deploy-soruyorum.sh ps",
+        "ops:logs": "bash scripts/deploy-soruyorum.sh logs",
+        "ops:config": "bash scripts/deploy-soruyorum.sh config",
         "smoke:portal:events-new": "bash scripts/smoke-portal-events-new.sh",
         "format": "prettier --write \"**/*.{ts,tsx,md}\""
     },
     "devDependencies": {
+        "nodemon": "^3.1.11",
         "prettier": "^3.0.0",
         "turbo": "latest"
     },

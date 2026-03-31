@@ -10,6 +10,7 @@ import {
     LayoutDashboard,
     LogOut
 } from "lucide-react";
+import { Logo } from "@ks-interaktif/ui";
 
 export function AdminSidebar() {
     const pathname = usePathname();
@@ -26,11 +27,8 @@ export function AdminSidebar() {
         <aside className="fixed left-0 top-0 h-screen w-64 bg-slate-900 text-white flex flex-col z-40">
             {/* Logo */}
             <div className="h-20 flex items-center px-6 border-b border-slate-800">
-                <Link href="/dashboard" className="flex items-center gap-2">
-                    <div className="w-8 h-8 bg-indigo-500 rounded-lg flex items-center justify-center text-white font-bold">
-                        KS
-                    </div>
-                    <span className="font-bold text-lg">Admin Panel</span>
+                <Link href="/dashboard" className="flex items-center gap-3">
+                    <Logo variant="dark" size="sm" animate={false} />
                 </Link>
             </div>
 

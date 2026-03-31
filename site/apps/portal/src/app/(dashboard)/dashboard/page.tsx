@@ -6,6 +6,7 @@ import { Button } from "@ks-interaktif/ui";
 import { Users, Play, Calendar, TrendingUp, Plus, Activity, Zap, AlertCircle } from "lucide-react";
 import Link from "next/link";
 import { trpc } from "@/utils/trpc";
+import { formatDate } from "@/utils/formatDate";
 import { useRouter } from "next/navigation";
 
 import { deleteEvent } from "@/services/api";
@@ -31,13 +32,7 @@ export default function DashboardPage() {
     const formatNumberTr = (value: number) => value.toLocaleString("tr-TR");
     const formatPctTr = (value: number) => `%${Math.abs(value).toLocaleString("tr-TR", { maximumFractionDigits: 1 })}`;
 
-    const safeToDateStringTr = (value: unknown): string => {
-        const raw = (value as any)?.createdAt ?? (value as any)?.created_at ?? value;
-        if (!raw) return "—";
-        const d = raw instanceof Date ? raw : new Date(raw);
-        if (Number.isNaN(d.getTime())) return "—";
-        return d.toLocaleDateString("tr-TR");
-    };
+
 
     const safeStatus = (value: unknown): "active" | "draft" | "completed" => {
         const s = String(value || "draft").toLowerCase();
@@ -71,6 +66,7 @@ export default function DashboardPage() {
     const engagementValue = stats ? `%${Math.round(stats.engagementRate)}` : "%0";
     const engagementChange = stats ? formatPctTr(stats.engagementRateDelta) : "—";
     const engagementIsPositive = Boolean(stats && stats.engagementRateDelta >= 0);
+    const hasEvents = (events?.length ?? 0) > 0;
 
     const handleEdit = (event: any) => {
         setEditingEvent(event);
@@ -106,28 +102,28 @@ export default function DashboardPage() {
     };
 
     return (
-        <div className="space-y-8 p-8 w-full overflow-x-hidden">
+        <div className="space-y-4 sm:space-y-6 lg:space-y-8 p-4 sm:p-6 lg:p-8 w-full">
             {/* Header */}
-            <div className="flex items-center justify-between">
-                <div>
-                    <h1 className="text-3xl font-black tracking-tight text-gray-900">
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 sm:gap-4">
+                <div className="min-w-0 flex-1">
+                    <h1 className="text-2xl sm:text-3xl font-black tracking-tight text-gray-900 break-words">
                         Hoş geldin,{" "}
                         <span className="text-transparent bg-clip-text bg-gradient-to-r from-red-600 to-red-600">
                             {(me?.name && me.name.trim().length > 0 ? me.name : "Admin") + " 👋"}
                         </span>
                     </h1>
-                    <p className="text-gray-500 mt-1 font-light">Bugün etkinliklerinizde neler oluyor?</p>
+                    <p className="text-gray-500 mt-1 font-light text-sm sm:text-base">Bugün etkinliklerinizde neler oluyor?</p>
                 </div>
                 <Button
                     onClick={handleNewEventClick}
-                    className="flex items-center justify-center bg-gradient-to-r from-red-600 to-red-700 hover:from-red-500 hover:to-red-600 text-white gap-2 shadow-lg shadow-red-900/20 border-0 rounded-full px-10 py-6 text-lg transition-all hover:scale-105"
+                    className="shrink-0 flex items-center justify-center bg-gradient-to-r from-red-600 to-red-700 hover:from-red-500 hover:to-red-600 text-white gap-2 shadow-lg shadow-red-900/20 border-0 rounded-full px-6 sm:px-10 py-4 sm:py-6 text-sm sm:text-lg transition-all hover:scale-105 w-full sm:w-auto"
                 >
-                    <Plus size={20} /> Yeni Etkinlik
+                    <Plus size={18} /> Yeni Etkinlik
                 </Button>
             </div>
 
             {/* Stats Grid */}
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 lg:gap-6">
                 <StatCard
                     title="Toplam Katılımcı"
                     value={totalParticipantsValue}
@@ -163,11 +159,11 @@ export default function DashboardPage() {
             </div>
 
             {/* Recent Events & Quick Actions */}
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 sm:gap-6 lg:gap-8">
                 {/* Left: Events List */}
-                <div className="lg:col-span-2 space-y-6">
+                <div className="lg:col-span-2 space-y-4 sm:space-y-6">
                     <div className="flex items-center justify-between">
-                        <h2 className="text-xl font-bold text-gray-900 tracking-tight">Son Etkinlikler</h2>
+                        <h2 className="text-lg sm:text-xl font-bold text-gray-900 tracking-tight">Son Etkinlikler</h2>
                         <Link href="/events" className="text-sm text-red-600 font-medium hover:text-red-700 transition-colors">Tümünü Gör</Link>
                     </div>
                     <div className="space-y-4">
@@ -188,8 +184,54 @@ export default function DashboardPage() {
                                 </Link>
                             </div>
                         ) : events?.length === 0 ? (
-                            <div className="text-center py-8 text-gray-500 bg-gray-50 rounded-xl border border-gray-100">
-                                Henüz etkinlik yok. Yeni bir etkinlik oluşturun!
+                            <div className="rounded-2xl sm:rounded-3xl border border-gray-200 bg-white p-5 sm:p-8 shadow-sm min-h-[300px] sm:min-h-[340px] flex flex-col justify-between">
+                                <div>
+                                    <div className="inline-flex items-center rounded-full bg-red-50 px-3 py-1 text-xs font-bold uppercase tracking-[0.24em] text-red-600">
+                                        Etkinlik Yok
+                                    </div>
+                                    <h3 className="mt-3 sm:mt-4 text-xl sm:text-2xl font-black tracking-tight text-gray-900">
+                                        İlk etkinliğinizi birkaç adımda başlatın
+                                    </h3>
+                                    <p className="mt-2 sm:mt-3 max-w-2xl text-sm leading-6 text-gray-600">
+                                        EVENT PASS hesabınızla hemen yeni bir etkinlik oluşturabilir, PIN veya QR ile katılımcı toplayabilir ve moderasyon ekranından yayına alabilirsiniz.
+                                    </p>
+                                </div>
+
+                                <div className="mt-5 sm:mt-8 grid gap-3 sm:gap-4 grid-cols-1 sm:grid-cols-3">
+                                    <div className="rounded-2xl border border-gray-200 bg-white p-5">
+                                        <div className="mb-3 inline-flex h-11 w-11 items-center justify-center rounded-2xl bg-red-100 text-red-600">
+                                            <Plus size={20} />
+                                        </div>
+                                        <p className="text-sm font-black text-gray-900">1. Etkinliği oluştur</p>
+                                        <p className="mt-2 text-sm text-gray-500">Başlığı girin, temel ayarları kaydedin ve sistemin PIN üretmesine izin verin.</p>
+                                    </div>
+                                    <div className="rounded-2xl border border-gray-200 bg-white p-5">
+                                        <div className="mb-3 inline-flex h-11 w-11 items-center justify-center rounded-2xl bg-blue-100 text-blue-600">
+                                            <Calendar size={20} />
+                                        </div>
+                                        <p className="text-sm font-black text-gray-900">2. PIN veya QR paylaş</p>
+                                        <p className="mt-2 text-sm text-gray-500">Katılımcılarınızı oluşturulan link veya QR kod üzerinden doğrudan etkinliğe alın.</p>
+                                    </div>
+                                    <div className="rounded-2xl border border-gray-200 bg-white p-5">
+                                        <div className="mb-3 inline-flex h-11 w-11 items-center justify-center rounded-2xl bg-green-100 text-green-600">
+                                            <Play size={20} />
+                                        </div>
+                                        <p className="text-sm font-black text-gray-900">3. Yayına alın</p>
+                                        <p className="mt-2 text-sm text-gray-500">Soruları yönetin, moderasyonu açın ve ekran yansıtma ile canlı akışı başlatın.</p>
+                                    </div>
+                                </div>
+
+                                <div className="mt-8 flex flex-col gap-3 sm:flex-row">
+                                    <Button
+                                        onClick={handleNewEventClick}
+                                        className="inline-flex items-center justify-center bg-gradient-to-r from-red-600 to-red-700 hover:from-red-500 hover:to-red-600 text-white gap-2 border-0 rounded-full px-6 py-3 text-sm font-semibold"
+                                    >
+                                        <Plus size={16} /> Yeni Etkinlik
+                                    </Button>
+                                    <Link href="/how-to" className="inline-flex items-center justify-center rounded-full border border-gray-300 px-6 py-3 text-sm font-semibold text-gray-700 transition-colors hover:bg-gray-100">
+                                        Kurulum Adımlarını Gör
+                                    </Link>
+                                </div>
                             </div>
                         ) : (
                             events?.slice(0, 10).map((event: any) => (
@@ -197,7 +239,7 @@ export default function DashboardPage() {
                                     key={event.id}
                                     id={event.id} // Pass ID
                                     title={event.name}
-                                    date={safeToDateStringTr(event?.createdAt ?? event?.created_at)}
+                                    date={formatDate(event?.createdAt ?? event?.created_at)}
                                     participants={event._count?.participants || 0}
                                     pin={String((event as any)?.eventPin ?? (event as any)?.event_pin ?? (event as any)?.pin ?? '').trim() || undefined}
                                     status={safeStatus(event?.status)}
@@ -211,7 +253,7 @@ export default function DashboardPage() {
                 </div>
 
                 {/* Right: Quick Actions / Tips */}
-                <div className="space-y-6">
+                <div className={`space-y-6 ${hasEvents ? "" : "lg:pt-2"}`}>
                     <div className="relative overflow-hidden bg-gradient-to-br from-gray-900 to-black rounded-2xl p-6 text-white shadow-xl shadow-gray-900/10">
                         <div className="absolute top-0 right-0 p-4 opacity-10">
                             <Zap size={100} />

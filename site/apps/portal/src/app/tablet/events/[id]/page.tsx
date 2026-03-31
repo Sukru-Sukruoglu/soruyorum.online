@@ -7,6 +7,7 @@ import { AlertCircle } from "lucide-react";
 
 import { trpc } from "../../../../utils/trpc";
 import { QandaModerator } from "../../../../components/events/QandaModerator";
+import { bootstrapPortalSession } from "../../../../utils/authSession";
 
 export default function TabletEventModeratorPage() {
     const params = useParams();
@@ -15,26 +16,38 @@ export default function TabletEventModeratorPage() {
 
     const eventId = params.id as string;
     const token = searchParams.get("t");
+    const hasBootstrapToken = Boolean(token && token.trim());
 
-    // If a short-lived token is provided, store it as the auth token and reload without query.
+    // If a short-lived token is provided, upgrade it into a secure httpOnly session cookie.
     useEffect(() => {
-        if (!token) return;
-        try {
-            localStorage.setItem("auth_token", token);
-        } finally {
-            // Remove token from URL (prevents re-sharing from address bar)
-            window.location.replace(window.location.pathname);
-        }
+        if (!hasBootstrapToken || !token) return;
+        void bootstrapPortalSession(token)
+            .catch(() => {
+                // Ignore here; page query will fail and show its own auth error state.
+            })
+            .finally(() => {
+                // Remove token from URL (prevents re-sharing from address bar)
+                window.location.replace(window.location.pathname);
+            });
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [token]);
+    }, [hasBootstrapToken, token]);
 
-    const { data: event, isLoading, isError, error } = trpc.events.getById.useQuery(eventId);
+    const { data: event, isLoading, isError, error } = trpc.events.getById.useQuery(eventId, {
+        enabled: !hasBootstrapToken,
+        retry: false,
+    });
 
     useEffect(() => {
-        if (isError && error?.message?.includes("UNAUTHORIZED")) {
+        const message = (error?.message || "").toUpperCase();
+        const code = (error as any)?.data?.code;
+        if (isError && (message.includes("UNAUTHORIZED") || code === "UNAUTHORIZED")) {
             router.replace("/login");
         }
     }, [isError, error, router]);
+
+    if (hasBootstrapToken) {
+        return <div className="text-center py-12 text-gray-500">Oturum hazırlanıyor...</div>;
+    }
 
     if (isLoading) {
         return <div className="text-center py-12 text-gray-500">Yükleniyor...</div>;

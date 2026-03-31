@@ -46,10 +46,11 @@ function QandaContent() {
             localStorage.removeItem('eventId');
             localStorage.removeItem('participantId');
             localStorage.removeItem('sessionId');
+            localStorage.removeItem('currentPin');
         } catch {
             // ignore
         }
-        router.push('/join');
+        router.push('/');
     };
 
     // Save to LocalStorage if present in URL

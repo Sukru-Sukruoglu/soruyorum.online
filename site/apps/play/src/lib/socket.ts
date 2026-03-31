@@ -14,3 +14,28 @@ export const getSocket = (): Socket => {
     }
     return socket;
 };
+
+/**
+ * Reset the socket connection completely.
+ * Call this when user joins a new event to ensure clean state.
+ */
+export const resetSocket = (): void => {
+    if (socket) {
+        socket.disconnect();
+        socket.removeAllListeners();
+        socket = null;
+    }
+};
+
+/**
+ * Get a fresh socket instance, disconnecting any existing one.
+ * Use this when joining a new event via QR code.
+ */
+export const getFreshSocket = (): Socket => {
+    resetSocket();
+    socket = io(SOCKET_URL, {
+        autoConnect: false,
+        transports: ["websocket"],
+    });
+    return socket;
+};

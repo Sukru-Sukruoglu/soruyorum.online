@@ -4,7 +4,7 @@ import { EventService } from '../services/eventService';
 async function main() {
     console.log('🔄 Veritabanındaki localhost linkleri ve QR kodları düzeltiliyor...');
 
-    const prodDomain = 'https://mobil.ksinteraktif.com';
+    const prodDomain = 'https://mobil.soruyorum.online';
 
     // 1. Fetch all events with localhost in joinUrl OR qrCodeUrl
     // Even if qrCodeUrl is base64, it might contain the substring 'localhost' if it was pre-generated.

@@ -27,12 +27,8 @@ export default function ReportsPage() {
             setLoading(true);
             setError(null);
             try {
-                const token = localStorage.getItem('auth_token') || localStorage.getItem('token') || '';
                 const response = await fetch('/api/reports', {
                     method: 'GET',
-                    headers: {
-                        ...(token ? { Authorization: `Bearer ${token}` } : {}),
-                    },
                 });
                 const data = await response.json().catch(() => null);
                 if (!response.ok) {
@@ -54,11 +50,11 @@ export default function ReportsPage() {
     // Group reports by eventId+type to show single entry with multiple formats
     const groupedReports = useMemo(() => {
         const groups = new Map<string, ReportItemDto & { formats: string[] }>();
-        
+
         for (const r of reports) {
             const key = `${r.eventId || 'unknown'}-${r.type || 'unknown'}`;
             const existing = groups.get(key);
-            
+
             if (existing) {
                 // Add format to existing group
                 const format = String(r.format || '').toLowerCase();
@@ -68,14 +64,14 @@ export default function ReportsPage() {
             } else {
                 // Create new group
                 const format = String(r.format || '').toLowerCase();
-                const formats = format === 'multi' 
+                const formats = format === 'multi'
                     ? (r.data?.availableFormats || ['pdf', 'xlsx', 'csv'])
                     : (format ? [format] : []);
-                    
+
                 groups.set(key, { ...r, formats });
             }
         }
-        
+
         return Array.from(groups.values());
     }, [reports]);
 
@@ -108,7 +104,11 @@ export default function ReportsPage() {
         if (!value) return '';
         const d = new Date(value);
         if (Number.isNaN(d.getTime())) return String(value);
-        return d.toLocaleString('tr-TR', { dateStyle: 'medium', timeStyle: 'short' });
+        return new Intl.DateTimeFormat('tr-TR', {
+            dateStyle: 'medium',
+            timeStyle: 'short',
+            timeZone: 'Europe/Istanbul',
+        }).format(d);
     };
 
     return (
@@ -121,7 +121,7 @@ export default function ReportsPage() {
                 <div className="flex items-center gap-3">
                     <div className="relative">
                         <Search size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
-                        <input 
+                        <input
                             type="text"
                             placeholder="Rapor ara..."
                             value={query}
@@ -183,12 +183,8 @@ function ReportItem({ title, date, formats, reportId }: { title: string; date: s
     };
 
     const handleDownload = async (format: string) => {
-        const token = localStorage.getItem('auth_token') || localStorage.getItem('token') || '';
         const response = await fetch(`/api/reports/${reportId}/download?format=${format}`, {
             method: 'GET',
-            headers: {
-                ...(token ? { Authorization: `Bearer ${token}` } : {}),
-            },
         });
 
         if (!response.ok) {

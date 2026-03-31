@@ -22,6 +22,7 @@
         "express-rate-limit": "^8.2.1",
         "ioredis": "^5.3.2",
         "jsonwebtoken": "^9.0.3",
+        "nodemailer": "^8.0.0",
         "pdfkit": "^0.17.2",
         "qrcode": "^1.5.4",
         "rate-limit-redis": "^4.3.1",
@@ -35,6 +36,7 @@
         "@types/express-rate-limit": "^6.0.2",
         "@types/jsonwebtoken": "^9.0.10",
         "@types/node": "^20.10.0",
+        "@types/nodemailer": "^7.0.9",
         "@types/qrcode": "^1.5.6",
         "ts-node-dev": "^2.0.0",
         "typescript": "^5.0.0"

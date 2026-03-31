@@ -6,8 +6,8 @@ export const runtime = "nodejs";
 
 export async function GET() {
     const candidates = [
-        path.join(process.cwd(), "public", "images", "logo.png"),
-        path.join(process.cwd(), "apps", "portal", "public", "images", "logo.png"),
+        path.join(process.cwd(), "public", "assets", "images", "favicons", "favicon.ico"),
+        path.join(process.cwd(), "apps", "portal", "public", "assets", "images", "favicons", "favicon.ico"),
     ];
 
     let bytes: Buffer | null = null;
@@ -26,7 +26,7 @@ export async function GET() {
 
     return new NextResponse(bytes, {
         headers: {
-            "Content-Type": "image/png",
+            "Content-Type": "image/x-icon",
             "Cache-Control": "public, max-age=3600",
         },
     });

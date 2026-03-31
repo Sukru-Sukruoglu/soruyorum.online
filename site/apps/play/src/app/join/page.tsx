@@ -2,7 +2,8 @@
 
 import { Button } from "@ks-interaktif/ui";
 import { useRouter, useSearchParams } from "next/navigation";
-import { Suspense, useState } from "react";
+import { Suspense, useState, useEffect } from "react";
+import { resetSocket } from "../../lib/socket";
 
 function JoinForm() {
     const router = useRouter();
@@ -12,9 +13,30 @@ function JoinForm() {
     const [name, setName] = useState("");
     const [avatarSeed, setAvatarSeed] = useState(Math.floor(Math.random() * 1000));
 
+    // Reset socket and clear old session when joining a new event
+    useEffect(() => {
+        // Disconnect any existing socket connection
+        resetSocket();
+        
+        // Clear old session data from localStorage
+        if (typeof window !== 'undefined') {
+            localStorage.removeItem('participantName');
+            localStorage.removeItem('eventId');
+            localStorage.removeItem('participantId');
+            localStorage.removeItem('sessionId');
+            localStorage.removeItem('currentPin');
+        }
+        
+        console.log(`New event join started with PIN: ${pin}`);
+    }, [pin]);
+
     const handleJoin = (e: React.FormEvent) => {
         e.preventDefault();
         if (name.length > 0) {
+            // Store current PIN in localStorage for reference
+            if (typeof window !== 'undefined') {
+                localStorage.setItem('currentPin', pin || '');
+            }
             router.push(`/lobby?pin=${pin}&name=${name}&avatar=${avatarSeed}`);
         }
     };

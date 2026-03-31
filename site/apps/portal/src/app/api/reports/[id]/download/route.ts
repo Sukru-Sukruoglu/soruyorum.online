@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { applyAuthorizationHeader } from '../../../_lib/authCookie';
 
 const API_URL = process.env.API_URL || 'http://localhost:4000';
 
@@ -7,8 +8,8 @@ export async function GET(request: NextRequest, context: { params: { id: string 
         const reportId = context.params.id;
         const format = request.nextUrl.searchParams.get('format') || '';
 
-        const cookie = request.headers.get('cookie') || '';
-        const authorization = request.headers.get('authorization') || '';
+        const upstreamHeaders = new Headers();
+        applyAuthorizationHeader(request, upstreamHeaders);
 
         const url = format 
             ? `${API_URL}/api/reports/${reportId}/download?format=${format}`
@@ -16,10 +17,7 @@ export async function GET(request: NextRequest, context: { params: { id: string 
 
         const response = await fetch(url, {
             method: 'GET',
-            headers: {
-                ...(cookie ? { cookie } : {}),
-                ...(authorization ? { authorization } : {}),
-            },
+            headers: upstreamHeaders,
         });
 
         if (!response.ok) {

@@ -7,7 +7,15 @@ import { z } from 'zod';
 import { randomUUID } from 'crypto';
 import { generateShortLivedToken } from '../utils/jwt';
 import { canManageEventSteps } from '../utils/eventPermissions';
-import { getOrganizationAccess, isSuperAdmin } from '../utils/access';
+import { getOrganizationAccess, isSuperAdmin, hasFullAccess } from '../utils/access';
+import { buildQandaPdfBase64, QANDA_PDF_VERSION } from '../utils/qandaReportPdf';
+import {
+    sanitizeSettingsForLimitedAccess,
+    themeDesignStateDiffers,
+    themeTouchesDesignKeys,
+    themeViolatesLimitedAccess,
+} from '../utils/themeAccess';
+import { getOrganizationJoinBaseUrl } from '../utils/domains';
 
 const router = express.Router();
 router.use(tenantContextMiddleware);
@@ -20,7 +28,10 @@ const mapEventForFrontend = (event: any) => {
     const joinUrl = event.join_url ?? event.joinUrl;
     const qrCodeUrl = event.qr_code_url ?? event.qrCodeUrl;
     const eventType = event.event_type ?? event.eventType;
-    const maxParticipants = event.max_participants ?? event.maxParticipants;
+    const maxParticipants =
+        (event.max_participants !== undefined ? event.max_participants : undefined) ??
+        (event.maxParticipants !== undefined ? event.maxParticipants : undefined) ??
+        null;
     const createdAt = event.created_at ?? event.createdAt;
     const updatedAt = event.updated_at ?? event.updatedAt;
 
@@ -54,7 +65,7 @@ const createEventSchema = z.object({
     title: z.string().min(1, 'Etkinlik başlığı zorunludur'),
     description: z.string().optional(),
     eventType: z.enum(['quiz', 'poll', 'tombala', 'matching']).default('quiz'),
-    maxParticipants: z.number().int().positive().optional(),
+    maxParticipants: z.number().int().positive().nullable().optional(),
     eventPin: z
         .string()
         .regex(/^\d{6}$/, 'PIN 6 haneli olmalıdır')
@@ -82,66 +93,11 @@ const createEventSchema = z.object({
     }).passthrough(),
 });
 
-async function buildQandaPdfBase64(params: {
-    eventName: string;
-    generatedAt: Date;
-    rows: Array<{
-        createdAt: any;
-        participantName?: string | null;
-        questionText?: string | null;
-        status?: string | null;
-        isAnswered?: boolean | null;
-    }>;
-}): Promise<string> {
-    const { default: PDFDocument } = await import('pdfkit');
-
-    const doc = new (PDFDocument as any)({ size: 'A4', margin: 48 });
-    const chunks: Buffer[] = [];
-    doc.on('data', (chunk: Buffer) => chunks.push(chunk));
-
-    const done = new Promise<Buffer>((resolve, reject) => {
-        doc.on('end', () => resolve(Buffer.concat(chunks)));
-        doc.on('error', reject);
-    });
-
-    const title = `${params.eventName || 'Etkinlik'} - Soru/Yorum Raporu`;
-    doc.fontSize(18).fillColor('#111').text(title);
-    doc.moveDown(0.25);
-    doc.fontSize(10).fillColor('#444').text(`Oluşturulma: ${params.generatedAt.toISOString()}`);
-    doc.moveDown(1);
-    doc.fillColor('#000');
-
-    if (!params.rows?.length) {
-        doc.fontSize(11).text('Kayıtlı soru/yorum bulunamadı.');
-        doc.end();
-        const buffer = await done;
-        return buffer.toString('base64');
-    }
-
-    doc.fontSize(11).text('Soru/Yorumlar', { underline: true });
-    doc.moveDown(0.5);
-    doc.fontSize(10);
-
-    for (let i = 0; i < params.rows.length; i++) {
-        const r = params.rows[i];
-        const who = (r.participantName || '').trim() || 'Anonim';
-        const when = r.createdAt ? new Date(r.createdAt).toISOString() : '';
-        const status = r.status ? String(r.status) : '';
-        const answered = r.isAnswered === true ? 'answered' : r.isAnswered === false ? 'unanswered' : '';
-
-        doc.fillColor('#111').text(`${i + 1}. ${who} — ${when}${status ? ` — ${status}` : ''}${answered ? ` — ${answered}` : ''}`);
-        doc.fillColor('#000').text(String(r.questionText || ''), { indent: 12 });
-        doc.moveDown(0.5);
-
-        if (doc.y > 760) {
-            doc.addPage();
-        }
-    }
-
-    doc.end();
-    const buffer = await done;
-    return buffer.toString('base64');
-}
+// PATCH endpoint should accept partial settings payloads (e.g. only qanda.screenMode)
+// because older events may not have full registration/gameplay blocks populated.
+const updateEventSchema = createEventSchema
+    .partial()
+    .extend({ settings: z.record(z.any()).optional() });
 
 async function buildQandaXlsxBase64(params: {
     eventName: string;
@@ -225,10 +181,21 @@ router.get('/', async (req, res, next) => {
 router.get('/:id', async (req, res, next) => {
     try {
         const access = await getOrganizationAccess(tenantDb.direct as any, req.organizationId!);
-        const effectiveAccess = isSuperAdmin({ role: req.userRole, email: req.userEmail })
+        const superAdminBypass = hasFullAccess({ role: req.userRole, email: req.userEmail });
+        const effectiveAccess = superAdminBypass
             ? {
                   ...access,
                   isFreeOrTrial: false,
+                  isExpired: false,
+                  hasActiveSubscription: true,
+                  features: {
+                      ...access.features,
+                      branding: true,
+                      customDomain: true,
+                      whiteLabel: true,
+                      maxParticipants: 10000,
+                      maxEvents: null,
+                  },
               }
             : access;
         const event = await tenantDb.findUnique('event', req.organizationId!, {
@@ -247,7 +214,40 @@ router.get('/:id', async (req, res, next) => {
             return res.status(404).json({ error: 'Etkinlik bulunamadı' });
         }
 
-        res.json({ event: { ...mapEventForFrontend(event), access: effectiveAccess } });
+        const mappedEvent = mapEventForFrontend(event);
+        const limitedSettings = !superAdminBypass && !effectiveAccess.features.branding
+            ? sanitizeSettingsForLimitedAccess((mappedEvent as any)?.settings)
+            : (mappedEvent as any)?.settings;
+
+        // Derive the canonical join host from the effective domain for this request.
+        const baseUrl = await getOrganizationJoinBaseUrl(tenantDb.direct as any, req.organizationId!, req as any);
+        let joinHost: string;
+        try {
+            joinHost = new URL(baseUrl).host;
+        } catch {
+            joinHost = 'mobil.soruyorum.online';
+        }
+
+        let joinUrl = mappedEvent.joinUrl;
+        let qrCodeUrl = mappedEvent.qrCodeUrl;
+        if (mappedEvent.eventPin) {
+            const nextJoinUrl = `${baseUrl.replace(/\/+$/, '')}/join?pin=${encodeURIComponent(mappedEvent.eventPin)}`;
+            if (nextJoinUrl !== joinUrl) {
+                joinUrl = nextJoinUrl;
+                qrCodeUrl = await EventService.generateQRCode(nextJoinUrl);
+            }
+        }
+
+        res.json({
+            event: {
+                ...mappedEvent,
+                ...(limitedSettings ? { settings: limitedSettings } : {}),
+                joinUrl,
+                qrCodeUrl,
+                joinHost,
+                access: effectiveAccess,
+            },
+        });
     } catch (error) {
         next(error);
     }
@@ -266,8 +266,22 @@ router.post('/', async (req, res, next) => {
         // Pro-only: branding (logo) customization in theme settings.
         // We enforce this on the server to prevent bypass via API calls.
         const access = await getOrganizationAccess(tenantDb.direct as any, req.organizationId!);
-        const superAdminBypass = isSuperAdmin({ role: req.userRole, email: req.userEmail });
-        if (!superAdminBypass && access.isFreeOrTrial) {
+        const superAdminBypass = hasFullAccess({ role: req.userRole, email: req.userEmail });
+
+        // Plan-based event limit
+        if (!superAdminBypass && access.features.maxEvents !== null) {
+            const eventCount = await tenantDb.direct.events.count({
+                where: { organization_id: req.organizationId },
+            });
+            if (eventCount >= access.features.maxEvents) {
+                return res.status(403).json({
+                    error: `Paketinizde en fazla ${access.features.maxEvents} etkinlik oluşturabilirsiniz. Daha fazla etkinlik için paketinizi yükseltin.`,
+                    code: 'EVENT_LIMIT_REACHED',
+                });
+            }
+        }
+
+        if (!superAdminBypass && !access.features.branding) {
             const newSettings: any = (validatedData as any).settings || {};
             const newTheme: any = newSettings.theme || {};
 
@@ -292,9 +306,17 @@ router.post('/', async (req, res, next) => {
 
             if (hasLeftLogo || hasRightLogo) {
                 return res.status(403).json({
-                    error: 'Logo ekleme ve logo ayarları Pro plan özelliğidir.',
+                    error: 'Logo ekleme ve logo ayarlari sadece full branding dahil paketlerde kullanilabilir.',
                     code: 'PRO_FEATURE',
                     feature: 'branding_logos',
+                });
+            }
+
+            if (themeViolatesLimitedAccess(newTheme)) {
+                return res.status(403).json({
+                    error: 'Gelismis tema ve gorsel ayarlari sadece full branding dahil paketlerde kullanilabilir. Alt paketlerde sadece Varsayilan ve Cift Renkler aciktir.',
+                    code: 'PRO_FEATURE',
+                    feature: 'advanced_designs',
                 });
             }
         }
@@ -311,10 +333,19 @@ router.post('/', async (req, res, next) => {
             }
         }
 
+        const planFeatures = access.features;
+        const effectiveMaxParticipants = superAdminBypass
+            ? (validatedData.maxParticipants === undefined ? null : validatedData.maxParticipants)
+            : (validatedData.maxParticipants != null
+                ? Math.min(validatedData.maxParticipants, planFeatures.maxParticipants)
+                : planFeatures.maxParticipants);
+
         const event = await EventService.createEvent({
             organizationId: req.organizationId!,
             userId: req.userId!,
             ...validatedData,
+            maxParticipants: effectiveMaxParticipants,
+            req,
         });
 
         const mappedEvent = mapEventForFrontend(event);
@@ -354,9 +385,20 @@ router.post('/', async (req, res, next) => {
 
 router.post('/:id/regenerate-pin', async (req, res, next) => {
     try {
+        const eventId = req.params.id;
+        
+        // First, kick all existing participants (they have the old PIN)
+        const { kickEventParticipants } = await import('../services/websocketService');
+        await kickEventParticipants({
+            eventId,
+            reason: 'PIN kodu değiştirildi. Lütfen yeni PIN ile tekrar katılın.'
+        });
+
+        // Then regenerate the PIN
         const result = await EventService.regeneratePin(
-            req.params.id,
-            req.organizationId!
+            eventId,
+            req.organizationId!,
+            req
         );
 
         await AuditLogger.log({
@@ -364,7 +406,7 @@ router.post('/:id/regenerate-pin', async (req, res, next) => {
             userId: req.userId,
             action: 'UPDATE',
             resource: 'event',
-            resourceId: req.params.id,
+            resourceId: eventId,
             details: { action: 'regenerate_pin', newPin: result.pin },
             ipAddress: req.ip,
         });
@@ -381,7 +423,7 @@ router.post('/:id/regenerate-pin', async (req, res, next) => {
 
 router.patch('/:id', async (req, res, next) => {
     try {
-        const validatedData = createEventSchema.partial().parse(req.body);
+        const validatedData = updateEventSchema.parse(req.body);
 
         if (allowedEventTypes && validatedData.eventType !== undefined && !allowedEventTypes.has(validatedData.eventType)) {
             return res.status(400).json({
@@ -393,16 +435,27 @@ router.patch('/:id', async (req, res, next) => {
         if (validatedData.title !== undefined) updateData.name = validatedData.title;
         if (validatedData.description !== undefined) updateData.description = validatedData.description;
         if (validatedData.eventType !== undefined) updateData.event_type = validatedData.eventType;
-        if (validatedData.maxParticipants !== undefined) updateData.max_participants = validatedData.maxParticipants;
+        const superAdminBypass = hasFullAccess({ role: req.userRole, email: req.userEmail });
+        const access = await getOrganizationAccess(tenantDb.direct as any, req.organizationId!);
+        if (superAdminBypass) {
+            if (validatedData.maxParticipants !== undefined) {
+                updateData.max_participants = validatedData.maxParticipants;
+            }
+        } else {
+            // Plan-based participant limit
+            const planLimit = access.features.maxParticipants;
+            if (validatedData.maxParticipants != null) {
+                updateData.max_participants = Math.min(validatedData.maxParticipants, planLimit);
+            } else {
+                updateData.max_participants = planLimit;
+            }
+        }
         if (validatedData.status !== undefined) updateData.status = validatedData.status;
 
         if (validatedData.settings !== undefined) {
             // Pro-only: branding (logo) customization in theme settings.
             // We enforce this on the server to prevent bypass via API calls.
-            const access = await getOrganizationAccess(tenantDb.direct as any, req.organizationId!);
-            const superAdminBypass = isSuperAdmin({ role: req.userRole, email: req.userEmail });
-
-            if (!superAdminBypass && access.isFreeOrTrial) {
+            if (!superAdminBypass && !access.features.branding) {
                 const existing = await tenantDb.findUnique<any>('event', req.organizationId!, {
                     where: { id: req.params.id },
                     select: { id: true, settings: true },
@@ -465,15 +518,33 @@ router.patch('/:id', async (req, res, next) => {
                 // Allow removal on Free/Trial (downgrade recovery), but do not allow adding/changing.
                 if (triesToAddOrChangeLeft || triesToAddOrChangeRight) {
                     return res.status(403).json({
-                        error: 'Logo ekleme ve logo ayarları Pro plan özelliğidir.',
+                        error: 'Logo ekleme ve logo ayarlari sadece full branding dahil paketlerde kullanilabilir.',
                         code: 'PRO_FEATURE',
                         feature: 'branding_logos',
                     });
+                }
+
+                if (themeTouchesDesignKeys(newTheme) && themeViolatesLimitedAccess(newTheme)) {
+                    const oldDesignState = oldTheme || {};
+                    const newDesignState = newTheme || {};
+
+                    if (themeDesignStateDiffers(oldDesignState, newDesignState)) {
+                        return res.status(403).json({
+                            error: 'Gelismis tema ve gorsel ayarlari sadece full branding dahil paketlerde kullanilabilir. Alt paketlerde sadece Varsayilan ve Cift Renkler aciktir.',
+                            code: 'PRO_FEATURE',
+                            feature: 'advanced_designs',
+                        });
+                    }
                 }
             }
 
             updateData.settings = validatedData.settings;
         }
+
+        // Check if status is being changed to a non-joinable state
+        const endingStatuses = ['finished', 'closed', 'ended', 'cancelled'];
+        const isEnding = validatedData.status !== undefined && 
+                         endingStatuses.includes(validatedData.status.toLowerCase());
 
         const event = await tenantDb.update(
             'event',
@@ -482,7 +553,26 @@ router.patch('/:id', async (req, res, next) => {
             updateData
         );
 
-        res.json({ event: mapEventForFrontend(event) });
+        // If event is ending, notify and disconnect all participants
+        if (isEnding) {
+            const { endEvent } = await import('../services/websocketService');
+            await endEvent({
+                eventId: req.params.id,
+                message: 'Etkinlik sona erdi. Katıldığınız için teşekkürler!'
+            });
+        }
+
+        const mappedEvent = mapEventForFrontend(event);
+        const limitedSettings = !superAdminBypass && !access.features.branding
+            ? sanitizeSettingsForLimitedAccess((mappedEvent as any)?.settings)
+            : (mappedEvent as any)?.settings;
+
+        res.json({
+            event: {
+                ...mappedEvent,
+                ...(limitedSettings ? { settings: limitedSettings } : {}),
+            },
+        });
     } catch (error) {
         next(error);
     }
@@ -504,7 +594,7 @@ router.post('/:id/start', async (req, res, next) => {
             return res.status(400).json({ error: 'Etkinlik PIN bulunamadı' });
         }
 
-        const joinUrl = EventService.generateJoinUrl(req.params.id, eventPin);
+        const joinUrl = await EventService.generateJoinUrl(req.params.id, eventPin, req.organizationId!, req);
         const qrCodeUrl = await EventService.generateQRCode(joinUrl);
 
         const event = await tenantDb.update(
@@ -611,7 +701,8 @@ router.post('/:id/tablet/token', async (req, res, next) => {
         }
 
         const role = String(req.userRole || 'organizer');
-        if (!canManageEventSteps(role, event.settings)) {
+        const superAdminBypass = hasFullAccess({ role: req.userRole, email: req.userEmail });
+        if (!superAdminBypass && !canManageEventSteps(role, event.settings)) {
             return res.status(403).json({ error: 'Tablet ekranı için yetkiniz yok' });
         }
 
@@ -626,7 +717,7 @@ router.post('/:id/tablet/token', async (req, res, next) => {
                 purpose: 'tablet',
                 eventId: req.params.id,
             } as any,
-            '10m'
+            '12h'
         );
 
         return res.json({ token });
@@ -756,6 +847,7 @@ router.get('/:id/qanda/report', async (req, res, next) => {
                                 endTime: event.end_time,
                             },
                             rowCount: rows.length,
+                            pdfVersion: QANDA_PDF_VERSION,
                             pdfBase64,
                         } as any,
                         generated_at: new Date(),
@@ -1018,6 +1110,7 @@ router.post('/:id/qanda/stop', async (req, res, next) => {
                                     endTime: event?.end_time || null,
                                 },
                                 rowCount: rows.length,
+                                pdfVersion: QANDA_PDF_VERSION,
                                 pdfBase64,
                             } as any,
                             generated_at: new Date(),
@@ -1052,7 +1145,7 @@ router.post('/:id/refresh-join', async (req, res, next) => {
             return res.status(400).json({ error: 'Etkinlik PIN bulunamadı' });
         }
 
-        const joinUrl = EventService.generateJoinUrl(req.params.id, eventPin);
+        const joinUrl = await EventService.generateJoinUrl(req.params.id, eventPin, req.organizationId!, req);
         const qrCodeUrl = await EventService.generateQRCode(joinUrl);
 
         const event = await tenantDb.update(

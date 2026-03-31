@@ -1,0 +1,133 @@
+Eventimo durumunu karistirmadan okumak icin bu dosya tek bir sade ozet olarak tutulur.
+
+## 1. Bitti
+
+Su an teknik olarak kapanmis olanlar:
+
+1. canli deploy alindi
+2. post-deploy-verify yesil gecti
+3. Q&A otomatik smoke gecti
+4. HTTP, SSE ve websocket health probe'lari gecti
+5. browser rollout smoke gecti
+6. `pnpm ops:rollout-run` temiz gecti
+7. sonuc `9/9 pass`
+8. rollout recommendation `GO`
+9. gecici smoke event'leri cleanup edildi
+10. rollout note, operator card ve manual signoff belgeleri yazildi
+
+Ana kanitlar:
+
+1. `artifacts/eventimo-rollout-evaluation.json`
+2. `artifacts/eventimo-rollout-note.md`
+3. `docs/ops/milestones/2026-03-26-eventimo-remaining-steps.md`
+4. `docs/ops/milestones/2026-03-26-eventimo-rollout-note.md`
+
+## 2. Simdi Kalan
+
+Gercek kalan tek kapanis budur:
+
+1. canli eventte `Q&A moderation` gozlemi
+2. canli eventte `Featured cleanup` gozlemi
+3. canli eventte `Theme-logo invalidation` gozlemi
+4. canli eventte `Quiz-lobby transition` gozlemi
+5. bu 4 sonuca gore `GO / LIMITED GO / NO-GO` karari
+
+Yani kod tarafinda ana blocker kalmadi.
+Kalan kisim operatorun canli UI gozlemidir.
+
+Bu is icin kullanilacak dosyalar:
+
+1. `docs/ops/milestones/2026-03-26-eventimo-live-click-runbook.md`
+2. `docs/ops/milestones/2026-03-26-eventimo-live-final-checklist.md`
+3. `docs/ops/milestones/2026-03-26-eventimo-core-v1-manual-signoff.md`
+
+## 3. Teknik Blocker Olmayanlar
+
+Bunlar eksik is gibi gorunse de rollout'u durduran maddeler degildir:
+
+1. rollout oncesi gerekirse `pnpm ops:rollout-run` tekrar calistirmak
+2. yeni artifact'lari rollout note'a eklemek
+3. canli eventte operatorun kisa not dusmesi
+
+## 4. Uzun Vadeli Sonra Yapilacaklar
+
+Bunlar bugunun rollout kapanisi degil, roadmap tarafidir:
+
+1. queue / worker mimarisinin daha ileri kurulumu
+2. observability genisletmesi
+3. metrics ve alerting
+4. p95 / p99 gorunurlugu
+5. yuk ve kapasite testi
+6. tam multi-node olgunlugu
+7. ortak core + marka katmani soyutlamasinin daha ileri urunlestirilmesi
+8. Soruyorum'dan Eventimo cekirdegine uzun vadeli kademeli tasima
+
+## 5. Tek Cumlelik Durum
+
+Eventimo icin teknik kapanis alinmistir.
+Kalan tek gercek is, canli eventte operatorun 4 UI maddesini isaretleyip nihai karari vermesidir.
+
+## 6. 10K Kisi Icin Gercek Durum
+
+Bu sistem 10.000 kisi hedefi dusunulerek toparlandi.
+Ama su an icin dogru cumle sudur:
+
+1. mimari yonu hazir
+2. rollout hazir
+3. join kapasitesi buyuk olcude kanitlandi
+4. full realtime event kapasitesi henuz tam kanitlanmadi
+
+Yani:
+
+1. `system ready`
+2. `join mostly proven`
+3. `full event capacity not yet proven`
+
+Bugune kadar gorulen net sonuc:
+
+1. `public join ramp` testi guclu gecti
+2. `direct backend 10K join` testi tam gecti
+3. join tarafindaki ana DB bottleneck giderildi
+4. ama iki sunuculu yapida `SSE + websocket fanout + moderator state propagation` hala ayri olarak kanitlanmalidir
+
+10K hazir demek icin su testlerin gecmesi gerekir:
+
+1. HTTP load test
+2. burst spike test
+3. SSE connection test
+4. API, Redis, CPU, memory ve response time gozlemi
+5. moderator aksiyonu altinda realtime propagation testi
+
+Bu is icin hazirlanan dosyalar:
+
+1. `docs/ops/eventimo-load-and-scale-plan.md`
+2. `docs/ops/eventimo-full-event-stress-runbook.md`
+3. `scripts/load/k6-event-settings.js`
+4. `scripts/load/k6-event-settings-burst.js`
+5. `scripts/load/sse-fanout-check.mjs`
+6. `scripts/load/k6-public-join-ramp.js`
+7. `scripts/load/watch-dual-server-health.mjs`
+
+## 7. Bugun Yapilacak Tek Sey
+
+Eger soru `sistem su an 10K kaldirir mi` ise, bugun yapilacak tek mantikli sey ilk kapasite testini baslatmaktir.
+
+Sira:
+
+1. gecerli bir test `PIN` belirle
+2. ilgili `EVENT_ID` belirle
+3. once 500 kullanicilik test kos
+4. sonra 1000 kullanicilik test kos
+5. sonra sonuc raporunu oku
+6. bottleneck varsa not al
+
+Hedef:
+
+1. once `10K hazir` demek degil
+2. once `500 / 1000 / 2500` seviyelerinde sistem nasil davraniyor bunu olcmek
+
+Bu asamadan sonra ancak su karar verilir:
+
+1. `10K hazir`
+2. `5000 hazir, 10K icin optimizasyon lazim`
+3. `mimari dogru ama kapasite kaniti henuz yok`

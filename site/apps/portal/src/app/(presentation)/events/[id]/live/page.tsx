@@ -1,15 +1,56 @@
 "use client";
 
 import { trpc } from "@/utils/trpc";
+import { isSuperAdminRole, hasFullAccessRole } from "@/utils/auth";
+import { fetchPortalAuthSession } from "@/utils/authSession";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useParams, useSearchParams } from "next/navigation";
 import { MessageSquare, Users, Quote, UserCheck, PowerOff } from "lucide-react";
+import { Logo } from "@ks-interaktif/ui";
+import { WavyBackground } from "@/components/ui/wavy-background";
+import { AuroraBackground } from "@/components/ui/aurora-background";
+import { BackgroundGradientAnimation } from "@/components/ui/background-gradient-animation";
+import { ShapesBackground } from "@/components/ui/shapes-background";
+import { PathsBackground } from "@/components/ui/paths-background";
+import { VortexBackground } from "@/components/ui/vortex-background";
+import { BeamsBackground } from "@/components/ui/beams-background";
+import { EtheralShadowBackground } from "@/components/ui/etheral-shadow-background";
+import { SmokeBackground } from "@/components/ui/smoke-background";
+import { buildGradientFlowGradients, GradientFlowBackground } from "@/components/ui/gradient-flow-background";
+import { FallingPatternBackground } from "@/components/ui/falling-pattern-background";
+import { GradientDotsBackground } from "@/components/ui/gradient-dots-background";
+import { WaveCanvasBackground } from "@/components/ui/wave-canvas-background";
+import { MeshShaderBackground } from "@/components/ui/mesh-shader-background";
+import { InfiniteGridBackground } from "@/components/ui/infinite-grid-background";
+import { WarpShaderBackground } from "@/components/ui/warp-shader-background";
+import { SilkBackground } from "@/components/ui/silk-background";
+import { ShaderHeroBackground } from "@/components/ui/shader-hero-background";
+import { ShaderRingsBackground } from "@/components/ui/shader-rings-background";
+import { ParticlePhysicsBackground } from "@/components/ui/particle-physics-background";
+import { GlslHillsBackground } from "@/components/ui/glsl-hills-background";
+import dynamic from "next/dynamic";
+
+const BackgroundPaperShaders = dynamic(
+    () => import("@/components/ui/background-paper-shaders").then((mod) => mod.BackgroundPaperShaders),
+    { ssr: false }
+);
+
+const EtherealBeamsBackground = dynamic(
+  () => import("@/components/ui/ethereal-beams-background").then((mod) => mod.EtherealBeamsBackground),
+  { ssr: false }
+);
+
+const CanvasRevealEffect = dynamic(
+  () => import("@/components/ui/canvas-reveal-effect").then((mod) => mod.CanvasRevealEffect),
+  { ssr: false }
+);
 
 const DEFAULT_CF_STREAM_HOST = 'customer-bl0til6mmugr9zxr.cloudflarestream.com';
+const LIVE_QR_SYNC_KEY = 'soruyorum_live_qr_sync';
 
 const DEFAULT_OPENING_BACKGROUND_URL =
     process.env.NEXT_PUBLIC_OPENING_THEME_BACKGROUND_URL ||
-    'https://imagedelivery.net/prdw3ANMyocSBJD-Do1EeQ/5f3d3fad-f750-4962-9122-4aa2c377aa00/soruyorum';
+    'https://imagedelivery.net/prdw3ANMyocSBJD-Do1EeQ/547991cc-0396-4e5e-754e-b08a20faf800/soruyorum';
 
 const DEFAULT_OPENING_VIDEO_URL =
     process.env.NEXT_PUBLIC_OPENING_THEME_VIDEO_URL ||
@@ -17,6 +58,9 @@ const DEFAULT_OPENING_VIDEO_URL =
     `https://${DEFAULT_CF_STREAM_HOST}/045897b49be6652b1570cfe649bebbbd/iframe?loop=true&autoplay=true&muted=true&controls=false&poster=${encodeURIComponent(
         `https://${DEFAULT_CF_STREAM_HOST}/045897b49be6652b1570cfe649bebbbd/thumbnails/thumbnail.jpg?time=&height=600`
     )}`;
+
+const DEFAULT_CENTER_WATERMARK_LOGO_URL =
+    'https://imagedelivery.net/prdw3ANMyocSBJD-Do1EeQ/d7761f20-fbbf-4235-2afc-5c31cfb53f00/soruyorum';
 
 const toCloudflareStreamEmbedUrl = (inputUrlOrId: string, opts?: { loop?: boolean; controls?: boolean }) => {
     const trimmed = (inputUrlOrId || '').trim();
@@ -64,15 +108,130 @@ export default function LiveQandaPage() {
     const eventId = params.id as string;
     const searchParams = useSearchParams();
     const isEmbed = useMemo(() => (searchParams?.get('embed') || '') === '1', [searchParams]);
+    const hideEditorLogos = useMemo(() => (searchParams?.get('hideEditorLogos') || '') === '1', [searchParams]);
     const previewTitleParam = useMemo(() => {
         if (!isEmbed) return '';
         return String(searchParams?.get('pt') || '');
     }, [isEmbed, searchParams]);
+    const previewDescriptionParam = useMemo(() => {
+        if (!isEmbed) return '';
+        return String(searchParams?.get('pd') || '');
+    }, [isEmbed, searchParams]);
+    const [embedPreviewTitle, setEmbedPreviewTitle] = useState('');
+    const [embedPreviewDescription, setEmbedPreviewDescription] = useState('');
+    const embedParentOrigin = useMemo(() => {
+        if (typeof document === 'undefined') return '';
+        const referrer = document.referrer || '';
+        if (!referrer) return window.location.origin;
+
+        try {
+            return new URL(referrer).origin;
+        } catch {
+            return window.location.origin;
+        }
+    }, []);
+
+    // Seed embed overrides from query params (back-compat) and accept live updates from the parent editor.
+    useEffect(() => {
+        if (!isEmbed) return;
+        setEmbedPreviewTitle(String(previewTitleParam || '').trim());
+        setEmbedPreviewDescription(String(previewDescriptionParam || '').trim());
+    }, [isEmbed, previewTitleParam, previewDescriptionParam]);
+
+    useEffect(() => {
+        if (!isEmbed) return;
+        // Ask parent for the latest preview overrides (covers iframe reloads / lost messages).
+        try {
+            window.parent?.postMessage(
+                { type: 'SORUYORUM_PREVIEW_READY' },
+                embedParentOrigin || window.location.origin
+            );
+        } catch {
+            // ignore
+        }
+    }, [embedParentOrigin, isEmbed]);
+
+    useEffect(() => {
+        if (!isEmbed) return;
+
+        const handler = (e: MessageEvent) => {
+            if (e.origin !== (embedParentOrigin || window.location.origin)) return;
+
+            const data = (e.data || {}) as any;
+            if (!data) return;
+
+            if (data.type === 'SORUYORUM_PREVIEW_UPDATE') {
+                const payload = (data.payload || data) as any;
+                if (typeof payload.pt === 'string') setEmbedPreviewTitle(payload.pt);
+                if (typeof payload.pd === 'string') setEmbedPreviewDescription(payload.pd);
+                return;
+            }
+
+            if (data.type === 'SORUYORUM_PREVIEW_SETTINGS') {
+                const payload = (data.payload || data) as any;
+                if (typeof payload.showInstructions === 'boolean') setSettingsOverride((p) => ({ ...p, showInstructions: payload.showInstructions }));
+                if (typeof payload.showQR === 'boolean') setSettingsOverride((p) => ({ ...p, showQR: payload.showQR }));
+                if (typeof payload.showStats === 'boolean') setSettingsOverride((p) => ({ ...p, showStats: payload.showStats }));
+                if (typeof payload.showNames === 'boolean') setSettingsOverride((p) => ({ ...p, showNames: payload.showNames }));
+                if (typeof payload.bgAnimation === 'boolean') setSettingsOverride((p) => ({ ...p, bgAnimation: payload.bgAnimation }));
+                if (typeof payload.bgAnimationType === 'string') setSettingsOverride((p) => ({ ...p, bgAnimationType: payload.bgAnimationType }));
+                if (typeof payload.auroraColorPreset === 'string') setSettingsOverride((p) => ({ ...p, auroraColorPreset: payload.auroraColorPreset }));
+                if (typeof payload.gradientColorStart === 'string') setSettingsOverride((p) => ({ ...p, gradientColorStart: payload.gradientColorStart }));
+                if (typeof payload.gradientColorEnd === 'string') setSettingsOverride((p) => ({ ...p, gradientColorEnd: payload.gradientColorEnd }));
+                return;
+            }
+        };
+
+        window.addEventListener('message', handler);
+        return () => window.removeEventListener('message', handler);
+    }, [embedParentOrigin, isEmbed]);
+
     const [anonymousModeFallback, setAnonymousModeFallback] = useState(false);
+    const [settingsOverride, setSettingsOverride] = useState<Record<string, boolean | string>>({});
     const [featuredPulse, setFeaturedPulse] = useState(false);
     const [wallPulseIds, setWallPulseIds] = useState<Record<string, boolean>>({});
+    const [qrExpanded, setQrExpanded] = useState(false);
     const wallPulseTimersRef = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
+    const lastQrCommandAtRef = useRef<string | null>(null);
     const [currentIndex, setCurrentIndex] = useState(0);
+    const [currentHost, setCurrentHost] = useState("mobil.soruyorum.online");
+
+    useEffect(() => {
+        const nextHost = (window.location.host || "").trim().toLowerCase();
+        if (nextHost) {
+            setCurrentHost(nextHost);
+        }
+    }, []);
+
+    useEffect(() => {
+        lastQrCommandAtRef.current = null;
+    }, [eventId]);
+
+    const isDemoMode = useMemo(() => {
+        const raw = String(process.env.NEXT_PUBLIC_DEMO_MODE || "").trim().toLowerCase();
+        return raw === "1" || raw === "true" || raw === "yes" || raw === "on";
+    }, []);
+
+    const [role, setRole] = useState<string | null>(null);
+    const [roleReady, setRoleReady] = useState(false);
+
+    useEffect(() => {
+        let mounted = true;
+        void fetchPortalAuthSession()
+            .then((session) => {
+                if (!mounted) return;
+                setRole(session.role);
+            })
+            .catch(() => {
+                if (mounted) setRole(null);
+            })
+            .finally(() => {
+                if (mounted) setRoleReady(true);
+            });
+        return () => {
+            mounted = false;
+        };
+    }, []);
 
     // Fallback only: if server flag is unavailable, use localStorage.
     useEffect(() => {
@@ -125,7 +284,34 @@ export default function LiveQandaPage() {
         { enabled: !!eventId, refetchInterval: 1000 }
     );
 
-    const rawThemeSettings = (eventData as any)?.theme ?? (eventData as any)?.settings?.theme;
+    // Do not assume platform branding is enabled before event data arrives.
+    // Otherwise a full-branding event flashes the default SoruYorum logo on refresh.
+    const platformBrandingEnabled = eventData ? (eventData as any)?.platformBranding !== false : false;
+    const isWhiteLabelEvent = !platformBrandingEnabled;
+    const cardBrandLogoUrl = platformBrandingEnabled ? DEFAULT_CENTER_WATERMARK_LOGO_URL : null;
+    const cardBrandLogoAlt = "SoruYorum";
+
+    const showDemoWatermark = useMemo(() => {
+        if (!isDemoMode) return false;
+        if (!roleReady) return false;
+        if (!platformBrandingEnabled) return false;
+        return !hasFullAccessRole(role);
+    }, [isDemoMode, role, roleReady, platformBrandingEnabled]);
+
+    const demoWatermarkLayer = showDemoWatermark ? (
+        <div
+            className="fixed inset-0 z-[5] pointer-events-none select-none flex items-center justify-center"
+            aria-hidden
+        >
+            <img
+                src={DEFAULT_CENTER_WATERMARK_LOGO_URL}
+                alt=""
+                className="w-[min(80vw,760px)] h-auto object-contain opacity-30"
+            />
+        </div>
+    ) : null;
+
+    const rawThemeSettings = (eventData as any)?.settings?.theme ?? (eventData as any)?.theme;
     const themeSettings = rawThemeSettings && typeof rawThemeSettings === 'object' ? rawThemeSettings : {};
     const hasThemeBackground = Boolean(themeSettings?.backgroundImage || themeSettings?.background || themeSettings?.backgroundColor);
 
@@ -154,7 +340,7 @@ export default function LiveQandaPage() {
                     className="absolute inset-0 w-full h-full"
                     src={openingVideoEmbedUrl}
                     title="Açılış videosu"
-                    allow="autoplay; fullscreen; encrypted-media; picture-in-picture"
+                    allow="autoplay; fullscreen; picture-in-picture"
                     loading="eager"
                 />
             ) : (
@@ -168,7 +354,7 @@ export default function LiveQandaPage() {
                     }}
                 />
             )}
-            <div className="absolute inset-0 bg-black/55" />
+            <div className="absolute inset-0 bg-black/15" />
         </div>
     ) : null;
 
@@ -178,7 +364,7 @@ export default function LiveQandaPage() {
         ? String((themeSettings as any)?.presentationTitle ?? '')
         : DEFAULT_PRESENTATION_TITLE;
 
-    const effectivePresentationTitle = String(previewTitleParam || presentationTitle || '').trim() || DEFAULT_PRESENTATION_TITLE;
+    const effectivePresentationTitle = String((embedPreviewTitle || previewTitleParam) || presentationTitle || '').trim() || DEFAULT_PRESENTATION_TITLE;
 
     // Duvar başlığı tüm etkinliklerde sabit olsun.
     const wallHeadingTitle = effectivePresentationTitle;
@@ -187,12 +373,220 @@ export default function LiveQandaPage() {
     const rotateHeadingSubtitle = String((themeSettings as any)?.rotateSubtitle || 'Sorular sırayla gösterilir.');
 
     const presentationDescription = String((themeSettings as any)?.presentationDescription || '').trim();
+    const effectivePresentationDescription = String((embedPreviewDescription || previewDescriptionParam) || presentationDescription || '').trim();
 
-    const showInstructions = (themeSettings as any)?.showInstructions !== false;
-    const showQR = (themeSettings as any)?.showQR !== false;
-    const showStats = (themeSettings as any)?.showStats !== false;
-    const showNames = (themeSettings as any)?.showNames !== false;
-    const bgAnimationEnabled = Boolean((themeSettings as any)?.bgAnimation);
+    const showInstructions = settingsOverride.showInstructions ?? (themeSettings as any)?.showInstructions !== false;
+    const showQR = settingsOverride.showQR ?? (themeSettings as any)?.showQR !== false;
+    const showStats = settingsOverride.showStats ?? (themeSettings as any)?.showStats !== false;
+    const showNames = settingsOverride.showNames ?? (themeSettings as any)?.showNames !== false;
+    const bgAnimationEnabled = 'bgAnimation' in settingsOverride ? Boolean(settingsOverride.bgAnimation) : Boolean((themeSettings as any)?.bgAnimation);
+    const bgAnimationType: string = (settingsOverride.bgAnimationType as string) || String((themeSettings as any)?.bgAnimationType || 'gradient');
+    const auroraColorPreset: string = (settingsOverride.auroraColorPreset as string) || String((themeSettings as any)?.auroraColorPreset || 'blue');
+    const gradientColorStart: string = (settingsOverride.gradientColorStart as string) || String((themeSettings as any)?.gradientColorStart || '#6366f1');
+    const gradientColorEnd: string = (settingsOverride.gradientColorEnd as string) || String((themeSettings as any)?.gradientColorEnd || '#8b5cf6');
+
+    const shouldShowOpeningBackdrop = hasOpeningBackdrop && !bgAnimationEnabled;
+
+    const bgAnimationLayer = !shouldShowOpeningBackdrop && bgAnimationEnabled ? (
+        bgAnimationType === 'gradient' ? (
+            <div className="absolute inset-0 pointer-events-none z-0">
+                <GradientFlowBackground gradients={buildGradientFlowGradients(gradientColorStart, gradientColorEnd)} />
+            </div>
+        ) : bgAnimationType === 'waves' ? (
+            <div className="absolute inset-0 pointer-events-none z-0">
+                <WavyBackground containerClassName="absolute inset-0" backgroundFill="#0a051d" blur={10} speed="fast" waveOpacity={0.5} />
+            </div>
+        ) : bgAnimationType === 'aurora' ? (
+            <div className="absolute inset-0 pointer-events-none z-0">
+                <AuroraBackground className="dark absolute inset-0 bg-transparent" showRadialGradient={false} colorPreset={auroraColorPreset} />
+            </div>
+        ) : bgAnimationType === 'mesh' ? (
+            <div className="absolute inset-0 pointer-events-none z-0">
+                <BackgroundGradientAnimation containerClassName="absolute inset-0" interactive={false} />
+            </div>
+        ) : bgAnimationType === 'shapes' ? (
+            <div className="absolute inset-0 pointer-events-none z-0">
+                <ShapesBackground />
+            </div>
+        ) : bgAnimationType === 'paths' ? (
+            <div className="absolute inset-0 pointer-events-none z-0">
+                <PathsBackground />
+            </div>
+        ) : bgAnimationType === 'vortex' ? (
+            <div className="absolute inset-0 pointer-events-none z-0">
+                <VortexBackground containerClassName="absolute inset-0" backgroundColor="transparent" rangeY={800} particleCount={500} />
+            </div>
+        ) : bgAnimationType === 'dots' ? (
+            <div className="absolute inset-0 pointer-events-none z-0">
+                <CanvasRevealEffect animationSpeed={5} containerClassName="bg-transparent" colors={[[59, 130, 246], [139, 92, 246]]} opacities={[0.2, 0.2, 0.2, 0.2, 0.2, 0.4, 0.4, 0.4, 0.4, 1]} dotSize={2} showGradient={false} />
+            </div>
+        ) : bgAnimationType === 'beams' ? (
+            <div className="absolute inset-0 pointer-events-none z-0">
+                <BeamsBackground />
+            </div>
+        ) : bgAnimationType === 'shadow' ? (
+            <div className="absolute inset-0 pointer-events-none z-0">
+                <EtheralShadowBackground />
+            </div>
+        ) : bgAnimationType === 'smoke' ? (
+            <div className="absolute inset-0 pointer-events-none z-0">
+                <SmokeBackground />
+            </div>
+        ) : bgAnimationType === 'flow' ? (
+            <div className="absolute inset-0 pointer-events-none z-0">
+                <GradientFlowBackground />
+            </div>
+        ) : bgAnimationType === 'rain' ? (
+            <div className="absolute inset-0 pointer-events-none z-0">
+                <FallingPatternBackground />
+            </div>
+        ) : bgAnimationType === 'gdots' ? (
+            <div className="absolute inset-0 pointer-events-none z-0">
+                <GradientDotsBackground />
+            </div>
+        ) : bgAnimationType === 'wave2' ? (
+            <div className="absolute inset-0 pointer-events-none z-0">
+                <WaveCanvasBackground />
+            </div>
+        ) : bgAnimationType === 'mShader' ? (
+            <div className="absolute inset-0 pointer-events-none z-0">
+                <MeshShaderBackground />
+            </div>
+        ) : bgAnimationType === 'infGrid' ? (
+            <div className="absolute inset-0 pointer-events-none z-0">
+                <InfiniteGridBackground />
+            </div>
+        ) : bgAnimationType === 'warp' ? (
+            <div className="absolute inset-0 pointer-events-none z-0">
+                <WarpShaderBackground />
+            </div>
+        ) : bgAnimationType === 'silk' ? (
+            <div className="absolute inset-0 pointer-events-none z-0">
+                <SilkBackground />
+            </div>
+        ) : bgAnimationType === 'sHero' ? (
+            <div className="absolute inset-0 pointer-events-none z-0">
+                <ShaderHeroBackground />
+            </div>
+        ) : bgAnimationType === 'rings' ? (
+            <div className="absolute inset-0 pointer-events-none z-0">
+                <ShaderRingsBackground />
+            </div>
+        ) : bgAnimationType === 'eBeams' ? (
+            <div className="absolute inset-0 pointer-events-none z-0">
+                <EtherealBeamsBackground />
+            </div>
+        ) : bgAnimationType === 'pPhys' ? (
+            <div className="absolute inset-0 pointer-events-none z-0">
+                <ParticlePhysicsBackground />
+            </div>
+        ) : bgAnimationType === 'hills' ? (
+            <div className="absolute inset-0 pointer-events-none z-0">
+                <GlslHillsBackground />
+            </div>
+        ) : bgAnimationType === 'paper' ? (
+            <div className="absolute inset-0 pointer-events-none z-0">
+                <BackgroundPaperShaders />
+            </div>
+        ) : (
+            <div className="absolute inset-0 pointer-events-none z-0">
+                <GradientFlowBackground gradients={buildGradientFlowGradients(gradientColorStart, gradientColorEnd)} />
+            </div>
+        )
+    ) : null;
+
+    const notifyQrExpanded = (expanded: boolean) => {
+        try {
+            if (!window.opener || (window.opener as any).closed) return;
+            window.opener.postMessage(
+                { type: 'SORUYORUM_LIVE_QR_STATE', eventId, expanded },
+                '*'
+            );
+        } catch {
+            // ignore
+        }
+    };
+
+    useEffect(() => {
+        if (!showQR) {
+            setQrExpanded(false);
+            notifyQrExpanded(false);
+        }
+    }, [showQR]);
+
+    useEffect(() => {
+        const isAllowedOrigin = (origin: string) => {
+            if (origin === window.location.origin) return true;
+            try {
+                const url = new URL(origin);
+                const host = (url.hostname || '').toLowerCase();
+                return (
+                    host === 'soruyorum.online' ||
+                    host.endsWith('.soruyorum.online') ||
+                    host.includes('192.168.68.73') ||
+                    host.includes('localhost')
+                );
+            } catch {
+                return false;
+            }
+        };
+
+        const handler = (e: MessageEvent) => {
+            if (!e?.origin || !isAllowedOrigin(e.origin)) return;
+            const data = (e.data || {}) as any;
+            if (!data) return;
+            if (data.type !== 'SORUYORUM_LIVE_QR_EXPAND') return;
+            if (data.eventId && String(data.eventId) !== String(eventId)) return;
+            if (!showQR) return;
+
+            const expanded = data.expanded;
+            const next = expanded === false ? false : true;
+            setQrExpanded(next);
+            notifyQrExpanded(next);
+        };
+
+        window.addEventListener('message', handler);
+        return () => window.removeEventListener('message', handler);
+    }, [eventId, showQR]);
+
+    useEffect(() => {
+        const applySyncPayload = (payload: any) => {
+            if (!payload) return;
+            if (payload.eventId && String(payload.eventId) !== String(eventId)) return;
+            if (!showQR) return;
+
+            const expanded = payload.expanded;
+            const next = expanded === false ? false : true;
+            setQrExpanded(next);
+            notifyQrExpanded(next);
+        };
+
+        const handleStorage = (e: StorageEvent) => {
+            if (e.key !== LIVE_QR_SYNC_KEY || !e.newValue) return;
+
+            try {
+                applySyncPayload(JSON.parse(e.newValue));
+            } catch {
+                // ignore invalid payloads
+            }
+        };
+
+        window.addEventListener('storage', handleStorage);
+        return () => window.removeEventListener('storage', handleStorage);
+    }, [eventId, showQR]);
+
+    useEffect(() => {
+        if (!showQR) return;
+
+        const commandAt = String((eventData as any)?.liveQrCommandAt || '').trim();
+        if (!commandAt) return;
+        if (lastQrCommandAtRef.current === commandAt) return;
+
+        lastQrCommandAtRef.current = commandAt;
+        const next = (eventData as any)?.liveQrExpanded === false ? false : true;
+        setQrExpanded(next);
+        notifyQrExpanded(next);
+    }, [eventData, showQR]);
 
     const qrPos = (themeSettings as any)?.qrPos as { x: number; y: number } | undefined;
     const qrAbsoluteStyle: React.CSSProperties | undefined = qrPos && typeof qrPos.x === 'number' && typeof qrPos.y === 'number'
@@ -226,31 +620,48 @@ export default function LiveQandaPage() {
     }, [themeSettings]);
 
     const leftLogo = (themeSettings as any)?.logo as
-        | { url?: string | null; x?: number; y?: number; size?: number }
+        | { url?: string | null; x?: number; y?: number; size?: number; shadow?: boolean; shadowColor?: string }
         | undefined;
     const rightLogo = (themeSettings as any)?.rightLogo as
-        | { url?: string | null; x?: number; y?: number; size?: number; anchor?: 'top-right' | 'bottom-right' }
+        | { url?: string | null; x?: number; y?: number; size?: number; anchor?: 'top-right' | 'bottom-right'; shadow?: boolean; shadowColor?: string }
         | undefined;
 
+    // Logo positions are authored in the editor's 1920×1080 coordinate space.
+    // Convert to viewport-relative units so they scale proportionally on any screen.
+    const DESIGN_W = 1920;
+    const DESIGN_H = 1080;
+    const LOGO_BAR_H = 72;
+
     const leftLogoUrl = (leftLogo?.url as string | null | undefined) || (themeSettings as any)?.logoUrl;
+    const lx = typeof leftLogo?.x === 'number' ? leftLogo.x : 0;
+    const ly = typeof leftLogo?.y === 'number' ? leftLogo.y : 0;
+    const lsize = typeof leftLogo?.size === 'number' ? leftLogo.size : 240;
+    const leftShadowColor = leftLogo?.shadowColor || '#ffffff';
     const leftLogoStyle: React.CSSProperties | undefined = leftLogoUrl
         ? {
-            width: `${typeof leftLogo?.size === 'number' ? leftLogo.size : 150}px`,
-            top: '72px',
-            left: '24px',
-            transform: `translate(${typeof leftLogo?.x === 'number' ? leftLogo.x : 0}px, ${typeof leftLogo?.y === 'number' ? leftLogo.y : 0}px)`,
+            left: `${(lx / DESIGN_W) * 100}vw`,
+            top: `${((LOGO_BAR_H + ly) / DESIGN_H) * 100}vh`,
+            width: `${(lsize / DESIGN_W) * 100}vw`,
+            ...(leftLogo?.shadow ? { filter: `drop-shadow(0 0 8px ${leftShadowColor}80) drop-shadow(0 0 20px ${leftShadowColor}40)` } : {}),
         }
         : undefined;
 
     const rightLogoUrl = (rightLogo?.url as string | null | undefined) || (themeSettings as any)?.rightLogoUrl;
+    const rx = typeof rightLogo?.x === 'number' ? rightLogo.x : 0;
+    const ry = typeof rightLogo?.y === 'number' ? rightLogo.y : 0;
+    const rsize = typeof rightLogo?.size === 'number' ? rightLogo.size : 240;
     const rightLogoStyle: React.CSSProperties | undefined = rightLogoUrl
         ? {
-            width: `${typeof rightLogo?.size === 'number' ? rightLogo.size : 150}px`,
-            right: '24px',
-            [rightLogo?.anchor === 'bottom-right' ? 'bottom' : 'top']: '72px',
-            transform: `translate(${typeof rightLogo?.x === 'number' ? rightLogo.x : 0}px, ${typeof rightLogo?.y === 'number' ? rightLogo.y : 0}px)`,
+            left: `${((DESIGN_W - rsize + rx) / DESIGN_W) * 100}vw`,
+            width: `${(rsize / DESIGN_W) * 100}vw`,
+            ...(rightLogo?.anchor === 'bottom-right'
+                ? { bottom: `${((LOGO_BAR_H - ry) / DESIGN_H) * 100}vh` }
+                : { top: `${((LOGO_BAR_H + ry) / DESIGN_H) * 100}vh` }
+            ),
         }
         : undefined;
+    const shouldRenderCustomThemeLogos = !(isEmbed && hideEditorLogos);
+    const shouldRenderPlatformLogo = shouldRenderCustomThemeLogos && platformBrandingEnabled;
 
     const parseToRgb = (color: string): { r: number; g: number; b: number } | null => {
         const raw = (color || '').trim();
@@ -304,14 +715,23 @@ export default function LiveQandaPage() {
     const explicitTextColor = (themeSettings as any)?.textColor as string | undefined;
     const baseTextColor = explicitTextColor || '#ffffff';
 
-    const textColor = baseTextColor;
-    const textColorSecondary = explicitTextColor
-        ? toRgba(baseTextColor, 0.75, isDarkText ? '#4b5563' : 'rgba(255,255,255,0.7)')
-        : 'rgba(255,255,255,0.7)';
-    const textColorMuted = explicitTextColor
-        ? toRgba(baseTextColor, 0.55, isDarkText ? '#6b7280' : 'rgba(255,255,255,0.5)')
-        : 'rgba(255,255,255,0.5)';
-    
+    const isWarpBg = bgAnimationType === 'warp';
+    const textColor = isWarpBg ? '#111111' : baseTextColor;
+    const textColorSecondary = isWarpBg
+        ? 'rgba(0,0,0,0.65)'
+        : explicitTextColor
+            ? toRgba(baseTextColor, 0.75, isDarkText ? 'rgba(0, 0, 0, 1)ff' : 'rgba(255,255,255,0.7)')
+            : 'rgba(255,255,255,0.7)';
+    const textColorMuted = isWarpBg
+        ? 'rgba(0,0,0,0.45)'
+        : explicitTextColor
+            ? toRgba(baseTextColor, 0.55, isDarkText ? '#000000ff' : 'rgba(255,255,255,0.5)')
+            : 'rgba(255,255,255,0.5)';
+
+    const isImageValue = (value: string) => {
+        return value.startsWith('/') || value.startsWith('http') || value.startsWith('data:image/');
+    };
+
     const themeBackgroundStyle = useMemo<React.CSSProperties | undefined>(() => {
         if (!hasThemeBackground) return undefined;
 
@@ -328,7 +748,7 @@ export default function LiveQandaPage() {
         // Background from theme (could be image path like /images/themes/...)
         if (themeSettings?.background) {
             // Check if it's an image path
-            if (themeSettings.background.startsWith('/') || themeSettings.background.startsWith('http')) {
+            if (isImageValue(themeSettings.background)) {
                 return {
                     backgroundImage: `url(${themeSettings.background})`,
                     backgroundSize: 'cover',
@@ -342,13 +762,17 @@ export default function LiveQandaPage() {
         // Solid background color (from theme categories with solid colors)
         if (themeSettings?.backgroundColor) {
             // Check if it's an image path
-            if (themeSettings.backgroundColor.startsWith('/') || themeSettings.backgroundColor.startsWith('http')) {
+            if (isImageValue(themeSettings.backgroundColor)) {
                 return {
                     backgroundImage: `url(${themeSettings.backgroundColor})`,
                     backgroundSize: 'cover',
                     backgroundPosition: 'center',
                     backgroundRepeat: 'no-repeat',
                 };
+            }
+            // Gradient stored in backgroundColor (backwards compat)
+            if (themeSettings.backgroundColor.includes('gradient')) {
+                return { background: themeSettings.backgroundColor };
             }
             return { backgroundColor: themeSettings.backgroundColor };
         }
@@ -357,9 +781,13 @@ export default function LiveQandaPage() {
     }, [hasThemeBackground, themeSettings?.background, themeSettings?.backgroundImage, themeSettings?.backgroundColor]);
 
     const baseStyle = useMemo<React.CSSProperties | undefined>(() => {
-        if (!fontFamily) return themeBackgroundStyle;
-        return { ...(themeBackgroundStyle || {}), fontFamily };
-    }, [themeBackgroundStyle, fontFamily]);
+        const animationBaseStyle = bgAnimationEnabled
+            ? { backgroundColor: '#0a051d' }
+            : (themeBackgroundStyle || undefined);
+
+        if (!fontFamily) return animationBaseStyle;
+        return { ...(animationBaseStyle || {}), fontFamily };
+    }, [bgAnimationEnabled, themeBackgroundStyle, fontFamily]);
 
     const qandaStopped = Boolean((eventData as any)?.qandaStopped);
 
@@ -390,35 +818,41 @@ export default function LiveQandaPage() {
         return `${upper}***`;
     };
 
-    // Extract hostname from joinUrl.
-    // IMPORTANT: Avoid SSR/CSR branching (e.g. window.location) here to prevent hydration mismatches.
     const joinHostname = useMemo(() => {
-        const variant = (process.env.NEXT_PUBLIC_SITE_VARIANT || '').toLowerCase();
-        if (variant === 'soruyorum') return 'mobil.soruyorum.online';
-        if (variant === 'ksinteraktif') return 'mobil.ksinteraktif.com';
-
-        const fallback = 'mobil.soruyorum.online';
-        const joinUrl = eventData?.joinUrl;
-        if (!joinUrl) return fallback;
-
-        try {
-            const url = new URL(joinUrl);
-            const host = url.hostname || fallback;
-
-            // If the event stored joinUrl points to a different tenant/brand, do not leak it.
-            // Prefer soruyorum for the soruyorum screen deployment.
-            if (host.endsWith('ksinteraktif.com')) return fallback;
-
-            return host;
-        } catch {
-            return fallback;
+        if (hasFullAccessRole(role)) {
+            return 'soruyorum.online';
         }
-    }, [eventData?.joinUrl]);
+
+        const fallback = currentHost || 'mobil.soruyorum.online';
+
+        // Priority 1: backend-provided joinHost (canonical, from organization_domains)
+        const backendHost = ((eventData as any)?.joinHost || '').trim().toLowerCase();
+        if (backendHost) return backendHost;
+
+        // Priority 2: parse from joinUrl stored on event
+        const joinUrl = eventData?.joinUrl;
+        if (joinUrl) {
+            try {
+                const url = new URL(joinUrl);
+                const parsed = (url.host || '').trim().toLowerCase();
+                if (parsed) return parsed;
+            } catch {
+                // ignore
+            }
+        }
+
+        // Priority 3: current browser host (works for direct live page access)
+        const current = (currentHost || '').trim().toLowerCase();
+        if (current) return current;
+
+        return fallback;
+    }, [role, (eventData as any)?.joinHost, eventData?.joinUrl, currentHost]);
 
     const canonicalJoinUrl = useMemo(() => {
         const pin = (eventData as any)?.eventPin || '';
-        if (!pin) return `https://${joinHostname}`;
-        return `https://${joinHostname}/join?pin=${encodeURIComponent(pin)}`;
+        const protocol = joinHostname.includes('localhost') || joinHostname.includes('192.168.68.73') ? 'http' : 'https';
+        if (!pin) return `${protocol}://${joinHostname}`;
+        return `${protocol}://${joinHostname}/join?pin=${encodeURIComponent(pin)}`;
     }, [joinHostname, (eventData as any)?.eventPin]);
 
     // Always encode the canonical join URL to avoid leaking the wrong tenant/brand
@@ -426,6 +860,35 @@ export default function LiveQandaPage() {
     const qrCodeUrl = useMemo(() => {
         return `https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(canonicalJoinUrl)}`;
     }, [canonicalJoinUrl]);
+
+    const qrExpandedLayer = qrExpanded && showQR ? (
+        <div
+            className="fixed inset-0 z-[90] bg-black/70 backdrop-blur-sm flex flex-col items-center justify-center p-8"
+            onClick={() => {
+                setQrExpanded(false);
+                notifyQrExpanded(false);
+            }}
+            role="button"
+            tabIndex={-1}
+        >
+            <div className="w-full max-w-4xl flex flex-col items-center justify-center gap-10" onClick={(e) => e.stopPropagation()}>
+                <div className="bg-white rounded-[2.5rem] p-6 md:p-8 shadow-2xl">
+                    <img
+                        src={qrCodeUrl}
+                        alt="QR Code"
+                        className="w-[min(78vw,560px)] h-[min(78vw,560px)]"
+                    />
+                </div>
+                <div className="text-center">
+                    <p className="text-white/90 text-xl md:text-2xl font-extrabold">
+                        Şu adrese girip: <span className="font-black">{joinHostname}</span> | kodu girin:{' '}
+                        <span className="font-black text-yellow-300">{eventData?.eventPin || '...'}</span>
+                    </p>
+                    <p className="mt-2 text-white/70 text-base md:text-lg font-medium">veya QR kodu taratın</p>
+                </div>
+            </div>
+        </div>
+    ) : null;
 
     // Use public endpoint - no auth required
     // Faster polling so newly approved questions appear quickly without websockets.
@@ -466,9 +929,9 @@ export default function LiveQandaPage() {
         const el = wallAreaRef.current;
         if (!el) return;
 
-        const CARD_MIN_W = 360; // px
-        const CARD_H = 180; // px (fixed card height below)
-        const GAP = 24; // px (gap-6)
+        const CARD_MIN_W = 280; // px
+        const CARD_H = 125; // px (fixed card height below)
+        const GAP = 12; // px (gap-3)
 
         const compute = () => {
             const rect = el.getBoundingClientRect();
@@ -580,9 +1043,16 @@ export default function LiveQandaPage() {
     // NOTE: Previously this screen rotated questions one-by-one.
     // Now it shows an "Instagram wall" feed when no featured question is active.
 
+    // In embed mode, wait for event data to avoid a flash of unstyled content.
+    if (isEmbed && !eventData) {
+        return <div className="min-h-screen bg-[#0a051d]" />;
+    }
+
     if (qandaStopped) {
         return (
             <div className="min-h-screen bg-black flex flex-col items-center justify-center text-white p-6">
+                {demoWatermarkLayer}
+                {qrExpandedLayer}
                 <div className="text-center space-y-6">
                     <div className="w-32 h-32 bg-red-500/10 rounded-full flex items-center justify-center mx-auto border border-red-500/20">
                         <PowerOff size={64} className="text-red-500" />
@@ -597,32 +1067,32 @@ export default function LiveQandaPage() {
     const shouldShowJoin = forcedView === 'join' || (!forcedView && renderQuestions.length === 0);
     if (shouldShowJoin) {
         return (
-            <div className="min-h-screen bg-[#0a051d] flex flex-col overflow-hidden relative" style={{ ...(baseStyle || {}), color: textColor }}>
-                {openingBackdropLayer}
+            <div className="min-h-screen bg-[#0a051d] flex flex-col overflow-hidden relative" style={{ ...(baseStyle || {}), color: textColor, animation: 'viewFadeIn 0.4s ease-out' }}>
+                {shouldShowOpeningBackdrop ? openingBackdropLayer : null}
+                {demoWatermarkLayer}
+                {qrExpandedLayer}
 
                 {/* Top Instruction Bar */}
                 {showInstructions ? (
-                    <div className="w-full bg-[#450a0a] py-3 px-6 text-center z-50">
-                        <p className="text-lg font-medium" style={{ color: textColor }}>
-                            Şu adrese girip: <span className="font-bold">{joinHostname}</span> | kodu girin:{' '}
-                            <span className="font-black text-yellow-400 text-xl">{eventData?.eventPin || '...'}</span> veya QR kodu taratın
+                    <div className="w-full bg-black/75 backdrop-blur-md py-4 px-6 text-center z-50 border-b border-white/15">
+                        <p className="text-xl font-bold drop-shadow-md" style={{ color: textColor }}>
+                            Şu adrese girip: <span className="font-extrabold text-white underline underline-offset-2">{joinHostname}</span> | kodu girin:{' '}
+                            <span className="font-black text-yellow-300 text-2xl tracking-widest drop-shadow-lg">{eventData?.eventPin || '...'}</span> veya QR kodu taratın
                         </p>
                     </div>
                 ) : null}
 
-                {!hasOpeningBackdrop && bgAnimationEnabled ? (
-                    <div className="absolute inset-0 pointer-events-none z-0">
-                        <div className="absolute top-[-20%] left-[-10%] w-[70%] h-[70%] bg-indigo-600/12 rounded-full blur-[140px] animate-pulse"></div>
-                        <div className="absolute bottom-[-20%] right-[-10%] w-[60%] h-[60%] bg-purple-600/12 rounded-full blur-[140px] animate-pulse"></div>
-                        <div className="absolute inset-0 bg-black/10"></div>
+                {bgAnimationLayer}
+
+                {shouldRenderCustomThemeLogos && leftLogoUrl ? (
+                    <img src={leftLogoUrl} alt="Logo" className="absolute z-50 object-contain" style={leftLogoStyle} />
+                ) : shouldRenderPlatformLogo ? (
+                    <div className="absolute z-50" style={{ left: '1.5vw', top: '8.5vh' }}>
+                        <Logo variant="dark" size="xl" animate />
                     </div>
                 ) : null}
 
-                {leftLogoUrl ? (
-                    <img src={leftLogoUrl} alt="Logo" className="absolute z-50 object-contain" style={leftLogoStyle} />
-                ) : null}
-
-                {rightLogoUrl ? (
+                {shouldRenderCustomThemeLogos && rightLogoUrl ? (
                     <img src={rightLogoUrl} alt="Logo" className="absolute z-50 object-contain" style={rightLogoStyle} />
                 ) : null}
 
@@ -636,10 +1106,10 @@ export default function LiveQandaPage() {
                             <MessageSquare size={64} className="text-indigo-400" />
                         </div>
                         <h1 className="text-6xl font-black tracking-tighter" style={{ color: textColor }}>
-                            {presentationTitle || DEFAULT_PRESENTATION_TITLE}
+                            {effectivePresentationTitle || DEFAULT_PRESENTATION_TITLE}
                         </h1>
                         <p className="text-2xl font-medium" style={{ color: textColorSecondary }}>
-                            {presentationDescription || 'Sorularınızı göndermek için QR kodu taratın veya PIN kodunu girin.'}
+                            {effectivePresentationDescription || 'Sorularınızı göndermek için QR kodu taratın veya PIN kodunu girin.'}
                         </p>
 
                         {/* QR Code and PIN Display */}
@@ -667,6 +1137,7 @@ export default function LiveQandaPage() {
                                 ) : null}
                             </div>
                         </div>
+
                     </div>
                 </div>
             </div>
@@ -683,8 +1154,10 @@ export default function LiveQandaPage() {
     // until the moderator clears it.
     if (featuredQuestion?.id && currentQuestion) {
         return (
-            <div className="min-h-screen bg-[#0a051d] overflow-hidden relative flex flex-col" style={{ ...(baseStyle || {}), color: textColor }}>
-                {openingBackdropLayer}
+            <div className="min-h-screen bg-[#0a051d] overflow-hidden relative flex flex-col" style={{ ...(baseStyle || {}), color: textColor, animation: 'viewFadeIn 0.4s ease-out' }}>
+                {shouldShowOpeningBackdrop ? openingBackdropLayer : null}
+                {demoWatermarkLayer}
+                {qrExpandedLayer}
                 {/* Background glow + dim */}
                 {!hasThemeBackground && !hasOpeningBackdrop ? (
                     <div className="absolute inset-0 pointer-events-none">
@@ -696,27 +1169,25 @@ export default function LiveQandaPage() {
 
                 {/* Top Instruction Bar */}
                 {showInstructions ? (
-                    <div className="w-full bg-[#450a0a] py-3 px-6 text-center z-50 shrink-0">
-                        <p className="text-lg font-medium" style={{ color: textColor }}>
-                            Şu adrese girip: <span className="font-bold">{joinHostname}</span> | kodu girin:{' '}
-                            <span className="font-black text-yellow-400 text-xl">{eventData?.eventPin || '...'}</span> veya QR kodu taratın
+                    <div className="w-full bg-black/75 backdrop-blur-md py-4 px-6 text-center z-50 shrink-0 border-b border-white/15">
+                        <p className="text-xl font-bold drop-shadow-md" style={{ color: textColor }}>
+                            Şu adrese girip: <span className="font-extrabold text-white underline underline-offset-2">{joinHostname}</span> | kodu girin:{' '}
+                            <span className="font-black text-yellow-300 text-2xl tracking-widest drop-shadow-lg">{eventData?.eventPin || '...'}</span> veya QR kodu taratın
                         </p>
                     </div>
                 ) : null}
 
-                {!hasOpeningBackdrop && bgAnimationEnabled ? (
-                    <div className="absolute inset-0 pointer-events-none z-0">
-                        <div className="absolute top-[-20%] left-[-10%] w-[70%] h-[70%] bg-indigo-600/12 rounded-full blur-[140px] animate-pulse"></div>
-                        <div className="absolute bottom-[-20%] right-[-10%] w-[60%] h-[60%] bg-purple-600/12 rounded-full blur-[140px] animate-pulse"></div>
-                        <div className="absolute inset-0 bg-black/10"></div>
+                {bgAnimationLayer}
+
+                {shouldRenderCustomThemeLogos && leftLogoUrl ? (
+                    <img src={leftLogoUrl} alt="Logo" className="absolute z-50 object-contain" style={leftLogoStyle} />
+                ) : shouldRenderPlatformLogo ? (
+                    <div className="absolute z-50" style={{ left: '1.5vw', top: '8.5vh' }}>
+                        <Logo variant="dark" size="xl" animate />
                     </div>
                 ) : null}
 
-                {leftLogoUrl ? (
-                    <img src={leftLogoUrl} alt="Logo" className="absolute z-50 object-contain" style={leftLogoStyle} />
-                ) : null}
-
-                {rightLogoUrl ? (
+                {shouldRenderCustomThemeLogos && rightLogoUrl ? (
                     <img src={rightLogoUrl} alt="Logo" className="absolute z-50 object-contain" style={rightLogoStyle} />
                 ) : null}
 
@@ -754,7 +1225,7 @@ export default function LiveQandaPage() {
                                 (featuredPulse ? "scale-[1.03]" : "scale-100")
                             }
                         >
-                            <p className="text-5xl md:text-7xl font-black leading-[1.05] tracking-tight mb-12 italic drop-shadow-lg" style={{ color: textColor }}>
+                            <p className="font-black leading-[1.08] tracking-tight italic drop-shadow-lg" style={{ color: textColor, fontSize: currentQuestion.questionText.length > 200 ? '1.5rem' : currentQuestion.questionText.length > 150 ? '2rem' : currentQuestion.questionText.length > 100 ? '2.5rem' : currentQuestion.questionText.length > 60 ? '3rem' : '4rem', marginBottom: currentQuestion.questionText.length > 100 ? '1.5rem' : '2.5rem' }}>
                                 “{currentQuestion.questionText}”
                             </p>
 
@@ -771,13 +1242,15 @@ export default function LiveQandaPage() {
                                 </div>
                             </div>
 
-                            <div className="mt-10 flex justify-end">
-                                <img
-                                    src="/images/beyazlogouzun.png"
-                                    alt="KS İnteraktif"
-                                    className="h-8 opacity-90"
-                                />
-                            </div>
+                            {cardBrandLogoUrl ? (
+                                <div className="mt-10 flex justify-end">
+                                    <img
+                                        src={cardBrandLogoUrl}
+                                        alt={cardBrandLogoAlt}
+                                        className="h-8 opacity-90"
+                                    />
+                                </div>
+                            ) : null}
                         </div>
                     </div>
                 </div>
@@ -801,8 +1274,10 @@ export default function LiveQandaPage() {
     // Rotate mode (one-by-one)
     if (effectiveScreenMode === 'rotate' && currentQuestion) {
         return (
-            <div className="min-h-screen bg-[#0a051d] overflow-hidden relative flex flex-col" style={{ ...(baseStyle || {}), color: textColor }}>
-                {openingBackdropLayer}
+            <div className="min-h-screen bg-[#0a051d] overflow-hidden relative flex flex-col" style={{ ...(baseStyle || {}), color: textColor, animation: 'viewFadeIn 0.4s ease-out' }}>
+                {shouldShowOpeningBackdrop ? openingBackdropLayer : null}
+                {demoWatermarkLayer}
+                {qrExpandedLayer}
 
                 {!hasThemeBackground && !hasOpeningBackdrop ? (
                     <div className="absolute inset-0 pointer-events-none">
@@ -813,27 +1288,25 @@ export default function LiveQandaPage() {
                 ) : null}
 
                 {showInstructions ? (
-                    <div className="w-full bg-[#450a0a] py-3 px-6 text-center z-50 shrink-0">
-                        <p className="text-lg font-medium" style={{ color: textColor }}>
-                            Şu adrese girip: <span className="font-bold">{joinHostname}</span> | kodu girin:{' '}
-                            <span className="font-black text-yellow-400 text-xl">{eventData?.eventPin || '...'}</span> veya QR kodu taratın
+                    <div className="w-full bg-black/75 backdrop-blur-md py-4 px-6 text-center z-50 shrink-0 border-b border-white/15">
+                        <p className="text-xl font-bold drop-shadow-md" style={{ color: textColor }}>
+                            Şu adrese girip: <span className="font-extrabold text-white underline underline-offset-2">{joinHostname}</span> | kodu girin:{' '}
+                            <span className="font-black text-yellow-300 text-2xl tracking-widest drop-shadow-lg">{eventData?.eventPin || '...'}</span> veya QR kodu taratın
                         </p>
                     </div>
                 ) : null}
 
-                {!hasOpeningBackdrop && bgAnimationEnabled ? (
-                    <div className="absolute inset-0 pointer-events-none z-0">
-                        <div className="absolute top-[-20%] left-[-10%] w-[70%] h-[70%] bg-indigo-600/12 rounded-full blur-[140px] animate-pulse"></div>
-                        <div className="absolute bottom-[-20%] right-[-10%] w-[60%] h-[60%] bg-purple-600/12 rounded-full blur-[140px] animate-pulse"></div>
-                        <div className="absolute inset-0 bg-black/10"></div>
+                {bgAnimationLayer}
+
+                {shouldRenderCustomThemeLogos && leftLogoUrl ? (
+                    <img src={leftLogoUrl} alt="Logo" className="absolute z-50 object-contain" style={leftLogoStyle} />
+                ) : shouldRenderPlatformLogo ? (
+                    <div className="absolute z-50" style={{ left: '1.5vw', top: '8.5vh' }}>
+                        <Logo variant="dark" size="xl" animate />
                     </div>
                 ) : null}
 
-                {leftLogoUrl ? (
-                    <img src={leftLogoUrl} alt="Logo" className="absolute z-50 object-contain" style={leftLogoStyle} />
-                ) : null}
-
-                {rightLogoUrl ? (
+                {shouldRenderCustomThemeLogos && rightLogoUrl ? (
                     <img src={rightLogoUrl} alt="Logo" className="absolute z-50 object-contain" style={rightLogoStyle} />
                 ) : null}
 
@@ -868,10 +1341,10 @@ export default function LiveQandaPage() {
                     ) : null}
                 </div>
 
-                <div className="flex-1 flex items-center justify-center p-12 relative z-10">
-                    <div className="w-full max-w-6xl">
-                        <div className="bg-black/40 backdrop-blur-xl border border-white/12 rounded-[4rem] p-16 md:p-20 shadow-2xl">
-                            <p className="text-5xl md:text-7xl font-black leading-[1.05] tracking-tight mb-12 italic drop-shadow-lg" style={{ color: textColor }}>
+                <div className="flex-1 flex items-start justify-center px-12 pt-4 pb-12 relative z-10">
+                    <div className="w-full max-w-6xl max-h-[65vh] flex flex-col">
+                        <div className="bg-black/40 backdrop-blur-xl border border-white/12 rounded-[4rem] shadow-2xl flex flex-col overflow-hidden" style={{ padding: currentQuestion.questionText.length > 120 ? '2.5rem 3rem' : currentQuestion.questionText.length > 80 ? '3rem 4rem' : '4rem 5rem' }}>
+                            <p className="font-black leading-[1.08] tracking-tight italic drop-shadow-lg flex-1" style={{ color: textColor, fontSize: currentQuestion.questionText.length > 200 ? '1.5rem' : currentQuestion.questionText.length > 150 ? '2rem' : currentQuestion.questionText.length > 100 ? '2.5rem' : currentQuestion.questionText.length > 60 ? '3rem' : '4rem', marginBottom: currentQuestion.questionText.length > 100 ? '1.5rem' : '2.5rem' }}>
                                 “{currentQuestion.questionText}”
                             </p>
                             <div className="flex items-center gap-6">
@@ -887,13 +1360,15 @@ export default function LiveQandaPage() {
                                 </div>
                             </div>
 
-                            <div className="mt-10 flex justify-end">
-                                <img
-                                    src="/images/beyazlogouzun.png"
-                                    alt="KS İnteraktif"
-                                    className="h-8 opacity-90"
-                                />
-                            </div>
+                            {cardBrandLogoUrl ? (
+                                <div className="mt-10 flex justify-end">
+                                    <img
+                                        src={cardBrandLogoUrl}
+                                        alt={cardBrandLogoAlt}
+                                        className="h-8 opacity-90"
+                                    />
+                                </div>
+                            ) : null}
                         </div>
                     </div>
                 </div>
@@ -915,31 +1390,31 @@ export default function LiveQandaPage() {
 
     // Instagram-wall mode (default when not in spotlight)
     return (
-        <div className="min-h-screen bg-[#0a051d] flex flex-col overflow-hidden relative" style={{ ...(baseStyle || {}), color: textColor }}>
+        <div className="min-h-screen bg-[#0a051d] flex flex-col overflow-hidden relative" style={{ ...(baseStyle || {}), color: textColor, animation: 'viewFadeIn 0.4s ease-out' }}>
             {openingBackdropLayer}
+            {demoWatermarkLayer}
+            {qrExpandedLayer}
             {/* Top Instruction Bar */}
             {showInstructions ? (
-                <div className="w-full bg-[#450a0a] py-3 px-6 text-center z-50 shrink-0">
-                    <p className="text-lg font-medium" style={{ color: textColor }}>
-                        Şu adrese girip: <span className="font-bold">{joinHostname}</span> | kodu girin:{' '}
-                        <span className="font-black text-yellow-400 text-xl">{eventData?.eventPin || '...'}</span> veya QR kodu taratın
+                <div className="w-full bg-black/75 backdrop-blur-md py-4 px-6 text-center z-50 shrink-0 border-b border-white/15">
+                    <p className="text-xl font-bold drop-shadow-md" style={{ color: textColor }}>
+                        Şu adrese girip: <span className="font-extrabold text-white underline underline-offset-2">{joinHostname}</span> | kodu girin:{' '}
+                        <span className="font-black text-yellow-300 text-2xl tracking-widest drop-shadow-lg">{eventData?.eventPin || '...'}</span> veya QR kodu taratın
                     </p>
                 </div>
             ) : null}
 
-            {!hasOpeningBackdrop && bgAnimationEnabled ? (
-                <div className="absolute inset-0 pointer-events-none z-0">
-                    <div className="absolute top-[-25%] left-[-15%] w-[70%] h-[70%] bg-indigo-600/12 rounded-full blur-[140px] animate-pulse"></div>
-                    <div className="absolute bottom-[-25%] right-[-15%] w-[60%] h-[60%] bg-purple-600/12 rounded-full blur-[140px] animate-pulse"></div>
-                    <div className="absolute inset-0 bg-black/10"></div>
+            {bgAnimationLayer}
+
+            {shouldRenderCustomThemeLogos && leftLogoUrl ? (
+                <img src={leftLogoUrl} alt="Logo" className="absolute z-50 object-contain" style={leftLogoStyle} />
+            ) : shouldRenderPlatformLogo ? (
+                <div className="absolute z-50" style={{ left: '1.5vw', top: '8.5vh' }}>
+                    <Logo variant="dark" size="xl" animate />
                 </div>
             ) : null}
 
-            {leftLogoUrl ? (
-                <img src={leftLogoUrl} alt="Logo" className="absolute z-50 object-contain" style={leftLogoStyle} />
-            ) : null}
-
-            {rightLogoUrl ? (
+            {shouldRenderCustomThemeLogos && rightLogoUrl ? (
                 <img src={rightLogoUrl} alt="Logo" className="absolute z-50 object-contain" style={rightLogoStyle} />
             ) : null}
 
@@ -954,7 +1429,7 @@ export default function LiveQandaPage() {
 
             {/* Header */}
             <div className="relative z-10 px-10 pt-10 pb-6">
-                <div className="flex items-end justify-end">
+                <div className="flex items-start justify-end gap-4">
                     <div className="bg-black/30 backdrop-blur-md rounded-2xl px-6 py-4 text-right">
                         <h1 className="text-5xl font-black tracking-tight drop-shadow-lg" style={{ color: textColor }}>
                             {wallHeadingTitle}
@@ -965,6 +1440,17 @@ export default function LiveQandaPage() {
                             </p>
                         ) : null}
                     </div>
+                    {showQR ? (
+                        <div className="flex items-center gap-4 p-3 bg-black/30 rounded-2xl border border-white/12 backdrop-blur-md">
+                            <div className="bg-white p-2 rounded-xl">
+                                <img src={qrCodeUrl} alt="QR Code" className="w-20 h-20" />
+                            </div>
+                            <div className="text-center">
+                                <p className="text-xs font-bold uppercase tracking-widest mb-1" style={{ color: textColorMuted }}>KOD</p>
+                                <p className="text-3xl font-black tracking-wider" style={{ color: textColor }}>{eventData?.eventPin || '...'}</p>
+                            </div>
+                        </div>
+                    ) : null}
                 </div>
 
                 <div className="mt-4 flex items-center justify-end gap-4">
@@ -988,7 +1474,7 @@ export default function LiveQandaPage() {
             <div className="relative z-10 flex-1 px-10 pb-10 overflow-hidden">
                 <div ref={wallAreaRef} className="h-full overflow-hidden">
                     <div
-                        className="max-w-[2200px] mx-auto grid gap-6"
+                        className="max-w-[2200px] mx-auto grid gap-3"
                         style={{ gridTemplateColumns: `repeat(${wallCols}, minmax(0, 1fr))` }}
                     >
                         {(wallQuestions.length ? wallQuestions : renderQuestions || []).slice(0, maxWallCards).map((q: any) => {
@@ -997,14 +1483,14 @@ export default function LiveQandaPage() {
                                 <div key={q.id}>
                                     <div
                                         className={
-                                            "bg-black/40 backdrop-blur-xl border border-white/12 rounded-3xl p-6 shadow-2xl h-[180px] flex flex-col justify-between " +
+                                            "bg-black/40 backdrop-blur-xl border border-white/12 rounded-2xl p-3 shadow-2xl h-[125px] flex flex-col justify-between " +
                                             "transform-gpu transition-transform duration-300 ease-out " +
                                             (isNew ? "scale-[1.02]" : "scale-100")
                                         }
                                         style={isNew ? { animation: "wallPop 700ms ease-out" } : undefined}
                                     >
                                         <p
-                                            className="text-[clamp(1.25rem,1.6vw,1.9rem)] font-black leading-snug tracking-tight"
+                                            className="text-[clamp(0.8rem,0.95vw,1.2rem)] font-black leading-snug tracking-tight"
                                             style={{
                                                 display: "-webkit-box",
                                                 WebkitBoxOrient: "vertical" as any,
@@ -1015,9 +1501,9 @@ export default function LiveQandaPage() {
                                         >
                                             {q.questionText}
                                         </p>
-                                        <div className="mt-4 flex items-center justify-between gap-4">
-                                            <div className="flex items-center gap-4 min-w-0">
-                                                <div className="w-11 h-11 rounded-2xl bg-gradient-to-br from-indigo-500 to-purple-500 flex items-center justify-center shadow-lg shadow-indigo-500/20 shrink-0 overflow-hidden">
+                                        <div className="mt-2 flex items-center justify-between gap-3">
+                                            <div className="flex items-center gap-3 min-w-0">
+                                                <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-indigo-500 to-purple-500 flex items-center justify-center shadow-lg shadow-indigo-500/20 shrink-0 overflow-hidden">
                                                     {q.participantAvatar ? (
                                                         <img
                                                             src={`/avatars/${q.participantAvatar}`}
@@ -1030,17 +1516,19 @@ export default function LiveQandaPage() {
                                                 </div>
                                                 <div className="min-w-0">
                                                     {showNames ? (
-                                                        <p className="text-[clamp(1rem,1.05vw,1.25rem)] font-black truncate" style={{ color: textColorSecondary }}>
+                                                <p className="text-[clamp(0.65rem,0.7vw,0.85rem)] font-black truncate" style={{ color: textColorSecondary }}>
                                                             {displayName(q.participantName)}
                                                         </p>
                                                     ) : null}
                                                 </div>
                                             </div>
-                                            <img
-                                                src="/images/beyazlogouzun.png"
-                                                alt="KS İnteraktif"
-                                                className="h-5 opacity-80 shrink-0"
-                                            />
+                                            {cardBrandLogoUrl ? (
+                                                <img
+                                                    src={cardBrandLogoUrl}
+                                                    alt={cardBrandLogoAlt}
+                                                    className="h-8 opacity-80 shrink-0"
+                                                />
+                                            ) : null}
                                         </div>
                                     </div>
                                 </div>
@@ -1049,19 +1537,6 @@ export default function LiveQandaPage() {
                     </div>
                 </div>
             </div>
-
-            {/* QR Code */}
-            {showQR ? (
-                <div className="absolute z-50 flex items-center gap-6 p-4 bg-white/6 rounded-2xl border border-white/12 backdrop-blur-md" style={qrAbsoluteStyle || { bottom: '40px', right: '40px' }}>
-                    <div className="bg-white p-2 rounded-xl">
-                        <img src={qrCodeUrl} alt="QR Code" className="w-24 h-24" />
-                    </div>
-                    <div className="text-center">
-                        <p className="text-xs font-bold uppercase tracking-widest mb-1" style={{ color: textColorMuted }}>KOD</p>
-                        <p className="text-3xl font-black tracking-wider" style={{ color: textColor }}>{eventData?.eventPin || '...'}</p>
-                    </div>
-                </div>
-            ) : null}
 
             <style jsx global>{`
                 @keyframes wallPop {
@@ -1074,9 +1549,10 @@ export default function LiveQandaPage() {
     );
 
     return (
-        <div className="min-h-screen bg-[#0a051d] text-white overflow-hidden relative flex flex-col">
+        <div className="min-h-screen bg-[#0a051d] text-white overflow-hidden relative flex flex-col" style={{ animation: 'viewFadeIn 0.4s ease-out' }}>
+            {demoWatermarkLayer}
             {/* Top Instruction Bar */}
-            <div className="w-full bg-[#450a0a] py-3 px-6 text-center z-50 shrink-0">
+            <div className="w-full bg-black/30 backdrop-blur-md py-3 px-6 text-center z-50 shrink-0">
                 <p className="text-white text-lg font-medium">
                     Şu adrese girip: <span className="font-bold">{joinHostname}</span> | kodu girin: <span className="font-black text-yellow-400 text-xl">{eventData?.eventPin || '...'}</span> veya QR kodu taratın
                 </p>

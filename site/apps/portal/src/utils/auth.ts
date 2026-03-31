@@ -46,6 +46,15 @@ export function isSuperAdminRole(role: string | null | undefined): boolean {
     return DEFAULT_SUPERADMIN_ROLES.includes(normalized);
 }
 
+/**
+ * Superadmin veya JuniorAdmin → plan/abonelik kısıtlaması yok.
+ */
+export function hasFullAccessRole(role: string | null | undefined): boolean {
+    if (isSuperAdminRole(role)) return true;
+    if (!role) return false;
+    return String(role).trim().toLowerCase() === "junioradmin";
+}
+
 export function isSuperAdminToken(token: string | null | undefined): boolean {
     const payload = decodeJwtPayload(token);
     return isSuperAdminRole(payload?.role ?? null);

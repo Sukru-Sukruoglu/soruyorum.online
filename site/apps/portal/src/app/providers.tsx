@@ -13,12 +13,6 @@ export default function Providers({ children }: { children: React.ReactNode }) {
                 httpBatchLink({
                     // Use relative URL to go through Next.js API proxy
                     url: "/api/trpc",
-                    headers() {
-                        const token = typeof window !== 'undefined' ? localStorage.getItem("auth_token") : null;
-                        return {
-                            Authorization: token ? `Bearer ${token}` : undefined,
-                        };
-                    },
                 }),
             ],
         })

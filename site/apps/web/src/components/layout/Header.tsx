@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { Button } from "@ks-interaktif/ui";
+import { Button, Logo } from "@ks-interaktif/ui";
 import { useState } from "react";
 import { Menu, X } from "lucide-react";
 
@@ -13,10 +13,7 @@ export function Header() {
             <div className="container mx-auto px-4 h-28 flex items-center justify-between">
                 {/* Logo */}
                 <Link href="/" className="flex items-center gap-2">
-                    <div className="relative w-28 h-28">
-                        {/* eslint-disable-next-line @next/next/no-img-element */}
-                        <img src="/images/kslogohome.png" alt="KS İnteraktif Logo" className="w-full h-full object-contain" />
-                    </div>
+                    <Logo variant="light" size="sm" />
                 </Link>
 
                 {/* Desktop Navigation */}
@@ -46,7 +43,7 @@ export function Header() {
 
                 {/* Actions */}
                 <div className="hidden md:flex items-center gap-4">
-                    <Link href="https://portal.ksinteraktif.com/login" className="text-gray-700 font-medium hover:text-red-600">
+                    <Link href="https://soruyorum.online/login" className="text-gray-700 font-medium hover:text-red-600">
                         Giriş Yap
                     </Link>
                     <Button className="bg-red-600 hover:bg-red-700 text-white rounded-full px-6 shadow-lg shadow-red-600/20 border-0">
@@ -118,7 +115,7 @@ export function Header() {
                         </Link>
                         <div className="border-t border-gray-100 my-2 pt-4 flex flex-col gap-3">
                             <Link
-                                href="https://portal.ksinteraktif.com/login"
+                                href="https://soruyorum.online/login"
                                 className="text-center py-2 text-gray-700 font-medium"
                             >
                                 Giriş Yap

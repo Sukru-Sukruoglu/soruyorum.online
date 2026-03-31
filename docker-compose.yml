@@ -4,8 +4,8 @@ services:
     container_name: soruyorum-soon
     restart: unless-stopped
     volumes:
-      - ./soon-site:/usr/share/nginx/html:ro
-      - ./soon-nginx/default.conf:/etc/nginx/conf.d/default.conf:ro
+      - ./site/public_html:/usr/share/nginx/html:ro
+      - ./nginx/default.conf:/etc/nginx/conf.d/default.conf:ro
     networks:
       - infra-network
     labels:
@@ -17,18 +17,48 @@ services:
       - "traefik.http.middlewares.soruyorum-soon-redirect-to-https.redirectscheme.permanent=true"
 
       - "traefik.http.routers.soruyorum-soon-http.entrypoints=http"
-      - "traefik.http.routers.soruyorum-soon-http.rule=Host(`soruyorum.online`) || Host(`www.soruyorum.online`)"
+      - "traefik.http.routers.soruyorum-soon-http.rule=(Host(`soruyorum.online`) || Host(`www.soruyorum.online`)) && (Path(`/`) || Path(`/index.html`) || Path(`/contact.html`) || Path(`/login.html`) || Path(`/sign-up.html`) || Path(`/kvkk.html`) || Path(`/acik-riza.html`) || Path(`/forgot-password`) || Path(`/forgot-password.html`) || PathPrefix(`/assets`))"
       - "traefik.http.routers.soruyorum-soon-http.middlewares=soruyorum-soon-redirect-to-https"
       - "traefik.http.routers.soruyorum-soon-http.priority=10000"
 
       - "traefik.http.routers.soruyorum-soon-https.entrypoints=https"
-      - "traefik.http.routers.soruyorum-soon-https.rule=Host(`soruyorum.online`) || Host(`www.soruyorum.online`)"
+      - "traefik.http.routers.soruyorum-soon-https.rule=(Host(`soruyorum.online`) || Host(`www.soruyorum.online`)) && (Path(`/`) || Path(`/index.html`) || Path(`/contact.html`) || Path(`/login.html`) || Path(`/sign-up.html`) || Path(`/kvkk.html`) || Path(`/acik-riza.html`) || Path(`/forgot-password`) || Path(`/forgot-password.html`) || PathPrefix(`/assets`))"
       - "traefik.http.routers.soruyorum-soon-https.tls=true"
       - "traefik.http.routers.soruyorum-soon-https.tls.certresolver=letsencrypt"
       - "traefik.http.routers.soruyorum-soon-https.priority=10000"
 
       - "traefik.http.services.soruyorum-soon.loadbalancer.server.port=80"
       - "traefik.http.routers.soruyorum-soon-https.service=soruyorum-soon"
+
+  # API auth proxy — routes /api/auth/* from soruyorum.online to the API server
+  soruyorum-api-proxy:
+    image: nginx:alpine
+    container_name: soruyorum-api-proxy
+    restart: unless-stopped
+    volumes:
+      - ./nginx/api-proxy.conf:/etc/nginx/conf.d/default.conf:ro
+    networks:
+      - infra-network
+    labels:
+      - "traefik.enable=true"
+      - "traefik.docker.network=infra-network"
+
+      - "traefik.http.middlewares.soruyorum-api-proxy-redirect-to-https.redirectscheme.scheme=https"
+      - "traefik.http.middlewares.soruyorum-api-proxy-redirect-to-https.redirectscheme.permanent=true"
+
+      - "traefik.http.routers.soruyorum-api-proxy-http.entrypoints=http"
+      - "traefik.http.routers.soruyorum-api-proxy-http.rule=(Host(`soruyorum.online`) || Host(`www.soruyorum.online`)) && PathPrefix(`/api/auth`)"
+      - "traefik.http.routers.soruyorum-api-proxy-http.middlewares=soruyorum-api-proxy-redirect-to-https"
+      - "traefik.http.routers.soruyorum-api-proxy-http.priority=15000"
+
+      - "traefik.http.routers.soruyorum-api-proxy-https.entrypoints=https"
+      - "traefik.http.routers.soruyorum-api-proxy-https.rule=(Host(`soruyorum.online`) || Host(`www.soruyorum.online`)) && PathPrefix(`/api/auth`)"
+      - "traefik.http.routers.soruyorum-api-proxy-https.tls=true"
+      - "traefik.http.routers.soruyorum-api-proxy-https.tls.certresolver=letsencrypt"
+      - "traefik.http.routers.soruyorum-api-proxy-https.priority=15000"
+
+      - "traefik.http.services.soruyorum-api-proxy.loadbalancer.server.port=80"
+      - "traefik.http.routers.soruyorum-api-proxy-https.service=soruyorum-api-proxy"
 
 networks:
   infra-network:
