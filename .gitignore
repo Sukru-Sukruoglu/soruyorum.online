@@ -42,3 +42,8 @@ site/docs/*.pdf
 # Misc
 site/domain_xray_*/
 "ubscription access resolution\""
+
+# Template/deneme klasörler
+site/yeni/
+site/tema/
+node_modules/
