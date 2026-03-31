@@ -1,206 +1,316 @@
-# Soruyorum.online — Teknik Genel Bakış
+# Soruyorum.online — Kurumsal Dijital Soru & Etkinlik Platformu
 
-Bu belge, `soruyorum.online` deposunun mimarisi, konteynerler, veritabanı ve operasyon özeti için referanstır.
+## 📋 Proje Hakkında
 
----
+**Soruyorum.online**, kurumsal etkinlikler, toplantılar, eğitimler ve interaktif sunumlar için geliştirilmiş **web tabanlı** bir platformdur. Katılımcılar PIN veya QR ile katılır; sorularını mobil veya masaüstünden gönderir. Yönetici tarafında canlı ekran, moderasyon, tema ve raporlama desteği vardır.
 
-## Proje Hakkında
+Yapı **monorepo** (Turbo + pnpm): ana uygulama **Next.js (portal)**, backend **Node API** + **Prisma** + **PostgreSQL**, önbellek **Redis**. Üretimde **Traefik** ile TLS ve çoklu host yönlendirmesi kullanılır.
 
-**Soruyorum.online**, etkinlik yöneticilerinin Q&A / quiz tarzı etkinlik oluşturması, katılımcıların PIN veya QR ile katılması ve sunum ekranında soruların yönetilmesi için kurulmuş bir **monorepo** projesidir. Ana uygulama **Next.js (portal)** ve **Node API sunucusu** üzerinde çalışır; **Traefik** ile HTTPS ve yönlendirme yapılır. Marka varyantı `NEXT_PUBLIC_SITE_VARIANT` ile (ör. `soruyorum`) ayırt edilir.
+### Temel Özellikler
 
----
-
-## Temel Özellikler
-
-- Organizasyon ve kullanıcı hesapları; oturum yönetimi
-- Etkinlik oluşturma, PIN/QR, katılım (`/join`)
-- Canlı sunum görünümü (`/events/[id]/live`) — duvar / tek tek / giriş görünümleri
-- Tema: arka plan, animasyon tipleri, logo, metinler
-- Q&A gönderileri (`qanda_submissions`) ve moderasyon akışı
-- Raporlar, faturalama / premium ile ilgili uçlar (PayTR, abonelik modelleri)
-- İsteğe bağlı: e-posta doğrulama, SMS OTP, özel alan adları (Cloudflare SaaS), white-label
-
----
-
-## Sistem Mimarisi
-
-| Katman      | Açıklama                                                                 |
-|------------|---------------------------------------------------------------------------|
-| **Edge**   | Traefik: `soruyorum.online`, `www`, `mobil`, `ekran`, `tablet`, `api.soruyorum.online`, `*.soruyorum.live` vb. |
-| **Portal** | Next.js: dashboard, public sayfalar, sunum ve join sayfaları (çoğu rota)   |
-| **API**    | `services/api-server`: iş mantığı, Prisma ile DB                          |
-| **Cache**  | Redis (şifre korumalı)                                                    |
-| **Veri**   | PostgreSQL (harici; `DATABASE_URL`)                                     |
-| **Statik** | `site/public_html` + ayrı nginx servisi                                  |
-
-Kök `docker-compose.yml` ile `site/docker-compose.yml` farklıdır: kökte çoğunlukla statik ve API proxy; asıl uygulama stack’i `site/` altındadır.
+- 🖥️ **Canlı Q&A / Quiz akışı** — Duvar, tek tek ve giriş görünümleri; sunum ekranı (`/events/[id]/live`)
+- 🔗 **Katılım** — PIN, QR, özelleştirilebilir kayıt alanları (`/join`)
+- 🏢 **Çok kiracılı organizasyon modeli** — `organizations` + kullanıcılar; tek PostgreSQL şeması (tenant başına ayrı DB değil, `organization_id` ile ayrım)
+- 📱 **Mobil uyumlu** — Katılımcı arayüzü responsive; ayrıca `mobil.*` / `play` uygulaması rotaları
+- 🎨 **Özelleştirilebilir tema** — Logo, renkler, arka plan görseli, animasyon tipleri (gradient, mesh, aurora, vb.)
+- ✅ **Moderasyon** — Soru onayı, durum alanları (`qanda_submissions`)
+- 📊 **Raporlama** — Etkinlik raporları (`reports`)
+- 💳 **Premium / faturalama** — PayTR ve abonelik modelleri (yapılandırmaya bağlı)
+- 🔐 **Güvenli oturum** — JWT tabanlı API oturumu; isteğe bağlı e-posta doğrulama, SMS OTP
+- 🌐 **Özel alan adı** — Cloudflare SaaS ile `organization_domains` akışı (yapılandırmaya bağlı)
 
 ---
 
-## Konteynerler
+## 🏗️ Sistem Mimarisi
 
-`site/docker-compose.yml` ve `site/docker-compose.traefik.yml`:
-
-| Servis                 | Rol                                      |
-|------------------------|------------------------------------------|
-| **soruyorum-portal**   | Next.js portal (iç port 3000)            |
-| **soruyorum-api-server** | Backend API (4000)                    |
-| **soruyorum-redis**    | Redis 7, AOF + `requirepass`             |
-| **soruyorum-static**   | Nginx; `public_html`                     |
-
-Traefik için **`infra-network`** (external) kullanılır. Üretimde ortam dosyası tipik olarak **`/etc/soruyorum/portal-api.env`**.
-
-**Yerel / ops script:** `site/scripts/deploy-soruyorum.sh`
-
-```bash
-# Örnek
-bash scripts/deploy-soruyorum.sh up
-bash scripts/deploy-soruyorum.sh ps
-```
-
-İçeride: `docker compose -p soruyorum -f docker-compose.yml -f docker-compose.traefik.yml …`
-
----
-
-## Veritabanı Yapısı
-
-- **ORM:** Prisma
-- **Şema:** `site/packages/database/prisma/schema.prisma`
-- **Motor:** PostgreSQL (`DATABASE_URL`)
-
-Öne çıkan modeller (özet):
-
-| Model                    | Açıklama                                      |
-|--------------------------|-----------------------------------------------|
-| **organizations**      | Organizasyon, plan, ayarlar                   |
-| **users**, **sessions**  | Kullanıcı ve oturum                           |
-| **events**               | Etkinlik, PIN, QR, `branding` / `settings` JSON |
-| **participants**         | Katılımcı                                     |
-| **qanda_submissions**    | Soru metni, durum, moderasyon                 |
-| **activities**, **questions**, **responses**, **scores** | Quiz akışı              |
-| **bingo_***              | Bingo oturumu / kart / kazanan                |
-| **reports**              | Rapor üretimi                                 |
-| **subscriptions**       | Abonelik                                      |
-| **organization_domains** | Özel alan adı doğrulama                       |
-| **audit_logs**, **app_settings** | Denetim ve uygulama ayarları        |
-| **newsletter_subscriptions**, **contact_submissions** | Pazarlama / iletişim formları |
-
----
-
-## Klasör Yapısı (özet)
+### Docker ve depo yapısı
 
 ```
 soruyorum.online/
-├── docker-compose.yml          # Kök: Traefik, statik, API proxy
+├── docker-compose.yml           # Kök: Traefik, statik “landing”, /api/auth proxy
 ├── nginx/
+│   ├── default.conf
+│   └── api-proxy.conf
 ├── docs/
-│   └── SORUYORUM-OVERVIEW.md   # Bu dosya
-└── site/                       # Asıl monorepo
-    ├── apps/
-    │   ├── portal/             # Next.js ana ürün
-    │   ├── play/               # Katılımcı / oyun yüzeyi
-    │   ├── admin/              # Yönetim arayüzü
-    │   └── web/                # Pazarlama / web sitesi
-    ├── packages/
-    │   └── database/           # Prisma şeması + client
-    ├── services/
-    │   └── api-server/         # Backend + Dockerfile
-    ├── public_html/            # Statik HTML (nginx)
-    ├── docker-compose.yml
+│   └── SORUYORUM-OVERVIEW.md    # Bu dosya
+└── site/                        # Asıl uygulama monoreposu
+    ├── docker-compose.yml       # portal + api + redis + static
     ├── docker-compose.traefik.yml
+    ├── apps/
+    │   ├── portal/              # Next.js (ana ürün)
+    │   ├── play/                # Katılımcı / oyun yüzeyi
+    │   ├── admin/               # Yönetim arayüzü
+    │   └── web/                 # Pazarlama sitesi parçaları
+    ├── packages/
+    │   └── database/            # Prisma şeması
+    ├── services/
+    │   └── api-server/          # REST / tRPC API
+    ├── public_html/             # Statik HTML (nginx)
     └── scripts/
         └── deploy-soruyorum.sh
 ```
 
----
+### Katman özeti
 
-## Kullanım Kılavuzu (kısa)
-
-1. **Ortam:** `site/.env.example` referans; gerçek değerler sunucuda `portal-api.env` vb.
-2. **Geliştirme:** Node ≥ 20, pnpm; `site` içinde `pnpm dev` (Turbo).
-3. **Üretim:** `deploy-soruyorum.sh up` veya `docker compose … up -d --build`.
-4. **Organizatör:** Portala giriş → etkinlik oluştur → düzenleyicide tema/sunum → sunumu başlat.
-5. **Katılımcı:** `https://soruyorum.online/join?pin=…` veya yayınlanan join URL’si.
-6. **Sunum:** `/events/{id}/live`; editörde mobil önizleme aynı sayfayı iframe ile açar.
-
----
-
-## Ayarlar ve Yapılandırma
-
-- **Sunucu / gizli:** `DATABASE_URL`, `REDIS_URL` veya `REDIS_PASSWORD`, `JWT_SECRET`, e-posta (SMTP/Brevo), SMS (NetGSM), PayTR, `EMAIL_TOKEN_SECRET`, `PHONE_OTP_SECRET`, Cloudflare SaaS token’ları.
-- **Portal → API:** `API_URL` (Docker içinde genelde `http://soruyorum-api-server:4000`).
-- **İstemci (build-time):** `NEXT_PUBLIC_*` — değişince portal imajının yeniden build edilmesi gerekir.
-- **Traefik:** Host kuralları ve öncelikler `site/docker-compose.traefik.yml` içinde.
-
-Ayrıntılı örnekler: `site/.env.example`.
+| Katman | Açıklama |
+|--------|----------|
+| Edge | Traefik — `soruyorum.online`, `www`, `mobil`, `ekran`, `tablet`, `api.soruyorum.online`, `*.soruyorum.live` vb. |
+| Portal | Next.js — dashboard, join, live, pazarlama sayfaları |
+| API | Node — Prisma, iş kuralları |
+| Redis | Oturum / kuyruk / önbellek (şifreli) |
+| PostgreSQL | Harici servis (`DATABASE_URL`) |
 
 ---
 
-## Varsayılan Etkinlik Ayarları
+## 🐳 Konteynerler
 
-- Etkinlik tipi: `events.event_type` (ör. `quiz`); API tarafında `ALLOWED_EVENT_TYPES`.
-- Tema ve canlı metinler `events.settings` / `branding` JSON içinde (ör. `theme`: `bgAnimation`, `bgAnimationType`, gradient renkleri, sunum başlığı/açıklaması, duvar ve tek tek başlıkları, logo URL’leri).
-- Kodda varsayılan animasyon tipi genelde **`gradient`**; kullanıcı editörden değiştirir ve API ile kalıcı hale gelir.
+`site/docker-compose.yml` (+ `docker-compose.traefik.yml`):
 
----
+| Konteyner / servis | Açıklama | Not |
+|--------------------|----------|-----|
+| **soruyorum-portal** | Next.js uygulaması | İç port **3000**; Traefik arkasında yayın |
+| **soruyorum-api-server** | Backend API | İç port **4000**; `api.soruyorum.online` ile erişilebilir |
+| **soruyorum-redis** | Redis 7 | AOF + `requirepass` |
+| **soruyorum-static** | Nginx | `public_html` statik dosyalar; örn. **127.0.0.1:8180** |
 
-## Teknik Detaylar
+Önkoşullar: Docker ağı **`infra-network`** (external), Redis için tanımlı **external volume** (compose’taki isim), üretimde **`/etc/soruyorum/portal-api.env`**.
 
-- **Monorepo:** Turbo + pnpm workspace (`site/package.json`).
-- **Portal:** Next.js App Router; sunum `(presentation)`, join `(public)` gibi route grupları.
-- **Gerçek zamanlı:** Socket kullanımı (`play` ve portal’da ilgili modüller).
-- **tRPC:** Örn. `events.getPublicInfo` ile portal–API.
-- **Prisma:** `packages/database`; migrate/generate buradan.
-
----
-
-## Demo Modu
-
-- Bayrak: **`NEXT_PUBLIC_DEMO_MODE`** — `true` / `1` / `yes` / `on` (string, build-time).
-- **Canlı sunum** (`apps/portal/src/app/(presentation)/events/[id]/live/page.tsx`): demo açıkken, platform markası açık etkinliklerde ve oturumdaki kullanıcı **tam yetkili rolde değilse** ekranda **yarı saydam merkez filigran** gösterilir (`showDemoWatermark`).
+**PostgreSQL** bu compose dosyasında tanımlı değildir; `DATABASE_URL` ile harici instance’a bağlanır.
 
 ---
 
-## Deployment
+## 🗄️ Veritabanı Yapısı
 
-Önkoşullar:
+- **Motor:** PostgreSQL  
+- **ORM:** Prisma — şema: `site/packages/database/prisma/schema.prisma`
 
-- Docker ağı: **`infra-network`** (external)
-- Redis volume: compose’ta tanımlı external volume (ör. `site_soruyorum_redis_data`)
-- **`/etc/soruyorum/portal-api.env`** doldurulmuş olmalı
+Tek veritabanı; çokluluk **organizasyon** (`organizations`) ve ilişkili `organization_id` alanları ile sağlanır.
 
-Örnek ( `site` dizininden ):
+```
+public (PostgreSQL)
+├── organizations          # Şirket / organizasyon, plan, ayarlar
+├── organization_domains   # Özel alan adı kayıtları
+├── users                  # Kullanıcılar
+├── sessions               # Oturum kayıtları
+├── subscriptions          # Abonelik
+├── events                 # Etkinlikler (PIN, QR, settings JSON, branding)
+├── participants           # Katılımcılar
+├── qanda_submissions      # Soru metinleri, moderasyon durumu
+├── activities             # Aktivite oturumları (quiz vb.)
+├── questions              # Soru bankası (quiz)
+├── responses              # Cevaplar
+├── scores                 # Puan / sıralama
+├── bingo_*                # Bingo ile ilgili tablolar (şemada mevcut)
+├── reports                # Rapor üretimi
+├── audit_logs             # Denetim günlüğü
+├── app_settings           # Uygulama anahtar/değer ayarları
+├── newsletter_subscriptions
+└── contact_submissions
+```
+
+---
+
+## 📁 Klasör Yapısı (site/apps/portal özeti)
+
+Next.js App Router — önemli gruplar:
+
+```
+site/apps/portal/src/
+├── app/
+│   ├── (auth)/              # login, register
+│   ├── (dashboard)/         # panel, etkinlikler, faturalama, ayarlar
+│   ├── (presentation)/      # events/[id]/live — sunum ekranı
+│   ├── (public)/            # join, plans, about, …
+│   ├── api/                 # Route handlers (auth, events, public, …)
+│   └── layout.tsx, globals.css
+├── components/
+│   ├── events/              # QuizEditorV2, kartlar, Q&A moderatör
+│   ├── layout/              # Sidebar, chrome
+│   └── ui/                    # Arka plan animasyonları, ortak UI
+└── lib/                       # Oturum, API yardımcıları
+```
+
+Katılımcı arka plan animasyonları: `app/(public)/join/page.tsx` ve `app/(presentation)/events/[id]/live/page.tsx` içinde `bgAnimationType` dallarıyla eşlenir.
+
+---
+
+## 🎮 Kullanım Kılavuzu
+
+### 1. Organizatör girişi
+
+1. `https://soruyorum.online` üzerinden **Giriş** / **Kayıt**  
+2. Dashboard’a yönlendirilirsiniz  
+3. Yeni etkinlik oluşturup PIN/QR ile paylaşım yapın  
+
+### 2. Etkinlik oluşturma ve düzenleme
+
+1. Dashboard → **Etkinlikler**  
+2. Yeni etkinlik; isim, tip (yapılandırmaya göre quiz/Q&A)  
+3. **Düzenleyici** (`/events/[id]/edit`): tema, sunum başlığı, arka plan animasyonu, logo, duvar/tek tek metinleri  
+4. **Kaydet**; canlı önizleme editör içinde iframe ile açılabilir  
+
+### 3. Katılımcı daveti
+
+- Join adresi: `https://soruyorum.online/join?pin=XXXXXX` (veya yapılandırılmış mobil alan adı)  
+- Sunum ekranında QR kod gösterimi tema ayarına bağlıdır  
+
+### 4. Sunum (projektör)
+
+1. Etkinlikten **Sunum** veya doğrudan `/events/{id}/live`  
+2. Görünümler: **Giriş** (QR/PIN), **Duvar**, **Tek tek**  
+3. Moderasyon paneli üzerinden soru onayı  
+
+### 5. Katılımcı deneyimi
+
+1. Join linkine gider  
+2. PIN (gerekirse) ve kayıt alanları (isim, avatar, KVKK vb. etkinlik ayarına göre)  
+3. Bağlandıktan sonra soru yazar ve gönderir  
+4. Moderasyon onayından sonra sunumda görünür  
+
+---
+
+## ⚙️ Ayarlar ve Yapılandırma
+
+### Ortam değişkenleri
+
+Tüm örnekler ve açıklamalar: **`site/.env.example`**.
+
+Özet (gerçek değerler repoda tutulmaz):
+
+| Alan | Örnek / not |
+|------|-------------|
+| `DATABASE_URL` | PostgreSQL bağlantısı |
+| `REDIS_PASSWORD`, `REDIS_URL` | Redis |
+| `JWT_SECRET` | Oturum imzası |
+| `API_URL` | Portal container içinden API (örn. `http://soruyorum-api-server:4000`) |
+| `NEXT_PUBLIC_*` | İstemciye gömülür; **build zamanında** sabitlenir |
+| `PUBLIC_PLANS_ENABLED` | `/plans` rotasını açar |
+| `PRICING_PREVIEW_TOKEN` | `/plans-preview?preview=…` |
+| PayTR, SMTP/Brevo, NetGSM | Opsiyonel ürün özellikleri |
+| `DOMAIN_SYSTEM_BASE`, Cloudflare | Özel alan SaaS |
+
+Üretim dosyası örneği: **`/etc/soruyorum/portal-api.env`**
+
+### Varsayılan etkinlik / tema davranışı
+
+| Ayar | Varsayılan (kod geneli) | Açıklama |
+|------|-------------------------|----------|
+| `bgAnimationType` | `gradient` | Arka plan animasyon tipi |
+| `bgAnimation` | etkinlik/theme’e göre | Animasyon katmanı açık/kapalı |
+| `event_type` | `quiz` (yapılandırmaya bağlı) | API `ALLOWED_EVENT_TYPES` ile kısıtlanabilir |
+| Sunum metinleri | boş veya şablon | `settings.theme` JSON içinde |
+
+---
+
+## 🔧 Teknik Detaylar
+
+### API ve iletişim
+
+- Portal, API ile **tRPC** ve route handler proxy’leri üzerinden konuşur (ör. `events.getPublicInfo`).  
+- Katılım ve public uçlar: `app/api/public/*`, `join-info`, `join`, vb.  
+
+### Güvenlik (özet)
+
+- Şifre hash, JWT oturum  
+- HTTPS (Traefik + Let’s Encrypt)  
+- İsteğe bağlı e-posta doğrulama, 2FA alanları (kullanıcı modelinde)  
+- Ödeme ve hassas anahtarlar yalnızca sunucu ortamında  
+
+### Performans
+
+- Next.js standalone Docker imajı  
+- Redis ile yoğun oturum / cache senaryoları  
+- Canlı ekranda bazı veriler için kısa aralıklı yenileme (ör. public info polling)  
+
+---
+
+## 📱 Demo modu
+
+- Bayrak: **`NEXT_PUBLIC_DEMO_MODE=true`** (veya `1` / `yes` / `on`) — **build-time**; compose’ta sıkça açıktır.  
+- **Canlı sunum** sayfasında: demo açıkken, platform markası açık etkinliklerde ve kullanıcı **tam yetkili rolde değilse** ekranda **yarı saydam merkez filigran** gösterilebilir (`live/page.tsx` — `showDemoWatermark`).  
+
+Demo ile üretim davranışını karıştırmamak için gerçek müşteri ortamında `NEXT_PUBLIC_DEMO_MODE=false` ile **portal imajını yeniden build** edin.
+
+---
+
+## 🚀 Deployment
+
+### Docker ile stack’i kaldırma (`site` dizini)
 
 ```bash
+cd /srv/webhosting/soruyorum.online/site
 docker compose -f docker-compose.yml -f docker-compose.traefik.yml up -d --build
 ```
 
-Sadece portal:
+### Sadece portal
 
 ```bash
 docker compose -f docker-compose.yml -f docker-compose.traefik.yml up -d --build soruyorum-portal
 ```
 
-Kök `site` için script: `pnpm ops:up` ( `site/scripts/deploy-soruyorum.sh` ).
-
----
-
-## Son Değişiklikler
-
-Kayıt için yerel depoda:
+### Script (site kökünden)
 
 ```bash
-git log --oneline -20
+cd /srv/webhosting/soruyorum.online/site
+bash scripts/deploy-soruyorum.sh up
+bash scripts/deploy-soruyorum.sh ps
+bash scripts/deploy-soruyorum.sh logs soruyorum-portal
 ```
 
-Bu belge sabit bir anlık görüntü değildir; önemli mimari değişikliklerde güncellenmelidir.
+### Konteyner durumu
+
+```bash
+docker compose -p soruyorum -f docker-compose.yml -f docker-compose.traefik.yml ps
+```
+
+### Log
+
+```bash
+docker logs soruyorum-soruyorum-portal-1 -f
+docker logs soruyorum-soruyorum-api-server-1 -f
+```
+
+*(Konteyner adları ortamda `docker ps` ile doğrulanmalıdır.)*
+
+### Veritabanı yedek
+
+PostgreSQL harici olduğundan, barındırdığınız sunucuda `pg_dump` kullanın (connection string `DATABASE_URL`).
 
 ---
 
-## Geliştirici Notları
+## 📝 Son Değişiklikler
 
-- `.env` ve `/etc/soruyorum/*.env` dosyalarını repoya eklemeyin.
-- Prisma şema değişikliğinde migrate ve servis yeniden başlatma / imaj build sırasına dikkat edin.
-- **Quiz editörü:** `apps/portal/src/components/events/QuizEditorV2.tsx` — büyük tek bileşen; layout/CSS değişiklikleri burada.
-- **Join / live arka planları:** `join/page.tsx` ve `live/page.tsx` içinde `bgAnimationType` dalları paralel tutulmalı; yeni animasyon tipi eklerken her iki yolu da güncelleyin.
-- Sunucu bileşenlerinde `"use client"` modüllerini doğrudan import etmeyin; oturum/etiket yardımcıları için `lib/` altındaki sunucu-güvenli modülleri kullanın.
+> Tarihleri güncel tutmak için: `git log --oneline -30`
+
+Örnek kayıtlar (depoya göre değişir):
+
+- Pazarlama header / oturum durumu (ana sayfa, fiyat önizleme)  
+- Billing ops ve ödeme aktivasyon akışı düzeltmeleri  
+- Sunum başlığı senkronu ve premium faturalama iyileştirmeleri  
+- Tema: canlı metin + logo konum kontrolleri  
+- Quiz editörü: önizleme + özellikler paneli yerleşimi (geniş ekranda yan yana grid)  
+
+---
+
+## 👨‍💻 Geliştirici notları
+
+- **Node:** ≥ 20, **pnpm** workspace (`site/package.json`).  
+- Yerel geliştirme: `cd site && pnpm dev` (Turbo).  
+- Prisma migrate sonrası API ve portal’ı yeniden başlatın veya imajı yeniden build edin.  
+- `NEXT_PUBLIC_*` değişince **portal Docker build** şart.  
+- `QuizEditorV2.tsx` çok büyük bir bileşen; UI düzeni ve tema kontrolleri burada toplanmıştır.  
+- Join ve live sayfalarında yeni bir `bgAnimationType` eklerken **iki dosyayı** birlikte güncelleyin: `join/page.tsx`, `live/page.tsx`.  
+- Sunucu bileşenlerinde `"use client"` modüllerini doğrudan import etmeyin; paylaşılan yardımcılar `lib/` altında sunucu-uyumlu olacak şekilde ayrılmalıdır.  
+
+---
+
+## 📞 İletişim
+
+**Soruyorum.online**
+
+- Web: https://soruyorum.online  
+- Geliştirici / kurumsal iletişim: compose ve sitede görünen `NEXT_PUBLIC_UPGRADE_CONTACT_*` veya organizasyon içi süreçlerinize göre güncelleyin.  
+
+---
+
+*Bu belge mimari özet içindir. Son güncelleme: Mart 2026*
