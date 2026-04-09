@@ -1,6 +1,4 @@
-# Base compose: soruyorum.online tam ayrim (Traefik label'lari override dosyasinda)
 name: soruyorum
-
 services:
   soruyorum-portal:
     image: soruyorum-portal:local
@@ -31,6 +29,17 @@ services:
       - NEXT_PUBLIC_UPGRADE_CONTACT_PHONES=+90 (532) 222-8040 | +90 (212) 503-3939
       - NEXT_PUBLIC_UPGRADE_CONTACT_ADDRESS=Istanbul, Kavacik Mh., Fatih Sultan Mehmet Cd. Tonoglu Plaza No:3 Kat:4, Beykoz/Istanbul
       - PUBLIC_PLANS_ENABLED=false
+    networks:
+      - default
+      - infra-network
+    labels:
+      - "traefik.enable=true"
+      - "traefik.docker.network=infra-network"
+      - "traefik.http.routers.soruyorum-portal-https.rule=Host(`soruyorum.online`) && PathPrefix(`/portal`)"
+      - "traefik.http.routers.soruyorum-portal-https.entrypoints=https"
+      - "traefik.http.routers.soruyorum-portal-https.tls=true"
+      - "traefik.http.routers.soruyorum-portal-https.tls.certresolver=letsencrypt"
+      - "traefik.http.services.soruyorum-portal.loadbalancer.server.port=3000"
     depends_on:
       - soruyorum-api-server
 
@@ -48,6 +57,17 @@ services:
       - NODE_ENV=production
       - REQUEST_BODY_LIMIT=50mb
       - ALLOWED_EVENT_TYPES=quiz
+    networks:
+      - default
+      - infra-network
+    labels:
+      - "traefik.enable=true"
+      - "traefik.docker.network=infra-network"
+      - "traefik.http.routers.soruyorum-api-https.rule=Host(`soruyorum.online`) && PathPrefix(`/api`)"
+      - "traefik.http.routers.soruyorum-api-https.entrypoints=https"
+      - "traefik.http.routers.soruyorum-api-https.tls=true"
+      - "traefik.http.routers.soruyorum-api-https.tls.certresolver=letsencrypt"
+      - "traefik.http.services.soruyorum-api.loadbalancer.server.port=4000"
     depends_on:
       - soruyorum-redis
 
@@ -68,8 +88,24 @@ services:
       - ./public_html/nginx.conf:/etc/nginx/conf.d/default.conf:ro
     ports:
       - "127.0.0.1:8180:80"
+    networks:
+      - default
+      - infra-network
+    labels:
+      - "traefik.enable=true"
+      - "traefik.docker.network=infra-network"
+      - "traefik.http.routers.soruyorum-static-https.rule=Host(`soruyorum.online`)"
+      - "traefik.http.routers.soruyorum-static-https.entrypoints=https"
+      - "traefik.http.routers.soruyorum-static-https.tls=true"
+      - "traefik.http.routers.soruyorum-static-https.tls.certresolver=letsencrypt"
+      - "traefik.http.routers.soruyorum-static-https.priority=10"
+      - "traefik.http.services.soruyorum-static.loadbalancer.server.port=80"
 
 volumes:
   soruyorum_redis_data:
     external: true
     name: site_soruyorum_redis_data
+
+networks:
+  infra-network:
+    external: true
