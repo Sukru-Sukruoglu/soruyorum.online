@@ -1,0 +1,17 @@
+name: Deploy Soruyorum
+
+on:
+  push:
+    branches: [main]
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Deploy to EX44
+        uses: appleboy/ssh-action@v1
+        with:
+          host: 46.4.35.233
+          username: deployer
+          key: ${{ secrets.DEPLOY_KEY_EX44 }}
+          script: soruyorum
