@@ -1,0 +1,7 @@
+# Windsurf Rules — soruyorum.online
+
+Skill sistemi: `.agent/skills/`
+Frontend görevlerinde: `.agent/skills/ultimate-frontend-design/SKILL.md` oku
+
+TypeScript strict. Tailwind CSS. Prisma ORM.
+Server Components varsayılan. `any` yasak. Türkçe yorum, İngilizce kod.

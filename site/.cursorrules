@@ -1,0 +1,14 @@
+# Cursor Rules — soruyorum.online
+
+## Skill Sistemi
+Tüm skill'ler `.agent/skills/` altında.
+Frontend/UI görevlerinde → `.agent/skills/ultimate-frontend-design/SKILL.md` oku
+
+## Kurallar
+- TypeScript strict, `any` yasak
+- Tailwind CSS utility-first
+- Server Components varsayılan, 'use client' sadece gerektiğinde
+- Fonksiyonel React, hooks kullan
+- Türkçe yorum, İngilizce kod
+- `console.log` bırakma
+- `var` kullanma
